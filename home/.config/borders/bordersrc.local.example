@@ -1,0 +1,3 @@
+# Copy to bordersrc.local for machine-specific border options.
+# Example:
+# options+=(width=3.0)

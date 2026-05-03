@@ -1,0 +1,34 @@
+# Ghostty: Tahoe Retrofuture glass terminal.
+
+theme = tahoe-retrofuture
+
+font-family = "JetBrainsMono Nerd Font"
+font-size = 14
+font-thicken = true
+
+background-opacity = 0.78
+background-opacity-cells = true
+background-blur = macos-glass-regular
+
+window-decoration = false
+macos-titlebar-style = hidden
+macos-option-as-alt = right
+window-theme = dark
+
+window-padding-x = 14
+window-padding-y = 12
+window-padding-balance = true
+
+cursor-style = block
+cursor-style-blink = false
+copy-on-select = clipboard
+confirm-close-surface = false
+shell-integration = bash
+title = 
+shell-integration-features = cursor,no-title,sudo
+command = /opt/homebrew/bin/bash --login
+
+keybind = cmd+shift+r=reload_config
+keybind = cmd+shift+comma=open_config
+
+config-file = ?local.config

@@ -1,0 +1,81 @@
+#!/usr/bin/env sh
+
+CONFIG_DIR="${HOME}/.config/sketchybar"
+PLUGIN_DIR="${CONFIG_DIR}/plugins"
+ITEM_DIR="${CONFIG_DIR}/items"
+YABAI_BIN="${YABAI_BIN:-/opt/homebrew/bin/yabai}"
+SKETCHYBAR_BIN="${SKETCHYBAR_BIN:-/opt/homebrew/bin/sketchybar}"
+HYPRMAC_BIN="${HYPRMAC_BIN:-$HOME/.local/bin/hyprmac}"
+[ -x "$YABAI_BIN" ] || YABAI_BIN="$(command -v yabai 2>/dev/null || printf '%s' /opt/homebrew/bin/yabai)"
+[ -x "$SKETCHYBAR_BIN" ] || SKETCHYBAR_BIN="$(command -v sketchybar 2>/dev/null || printf '%s' /opt/homebrew/bin/sketchybar)"
+[ -x "$HYPRMAC_BIN" ] || HYPRMAC_BIN="$(command -v hyprmac 2>/dev/null || printf '%s' "$HOME/.local/bin/hyprmac")"
+
+export CONFIG_DIR PLUGIN_DIR ITEM_DIR YABAI_BIN SKETCHYBAR_BIN HYPRMAC_BIN
+
+[ -r "${CONFIG_DIR}/local.pre.sh" ] && . "${CONFIG_DIR}/local.pre.sh"
+. "${CONFIG_DIR}/theme.sh"
+
+"$SKETCHYBAR_BIN" --bar \
+  height="${BAR_HEIGHT}" \
+  position=top \
+  sticky=on \
+  topmost=window \
+  padding_left=8 \
+  padding_right=8 \
+  color="${BAR_BG}" \
+  shadow=off \
+  blur_radius=46 \
+  y_offset=4 \
+  margin=6 \
+  corner_radius=16
+
+"$SKETCHYBAR_BIN" --default \
+  updates=when_shown \
+  icon.font="${FONT_TEXT}:Semibold:13.0" \
+  icon.color="${TEXT}" \
+  icon.padding_left=6 \
+  icon.padding_right=6 \
+  label.font="${FONT_TEXT}:Medium:12.0" \
+  label.color="${TEXT}" \
+  label.padding_left=3 \
+  label.padding_right=6 \
+  padding_left=4 \
+  padding_right=4 \
+  background.color="${ITEM_BG}" \
+  background.corner_radius=10 \
+  background.height=23 \
+  background.border_width=1 \
+  background.border_color="${ITEM_BORDER}"
+
+"$SKETCHYBAR_BIN" --add event yabai_space_changed
+"$SKETCHYBAR_BIN" --add event yabai_spaces_changed
+"$SKETCHYBAR_BIN" --add event yabai_window_changed
+
+if [ -x "$YABAI_BIN" ]; then
+  "$YABAI_BIN" -m signal --remove sketchybar_space_changed >/dev/null 2>&1 || true
+  "$YABAI_BIN" -m signal --remove sketchybar_space_created >/dev/null 2>&1 || true
+  "$YABAI_BIN" -m signal --remove sketchybar_space_destroyed >/dev/null 2>&1 || true
+  "$YABAI_BIN" -m signal --remove sketchybar_window_created >/dev/null 2>&1 || true
+  "$YABAI_BIN" -m signal --remove sketchybar_window_destroyed >/dev/null 2>&1 || true
+  "$YABAI_BIN" -m signal --remove sketchybar_window_focused >/dev/null 2>&1 || true
+  "$YABAI_BIN" -m signal --remove sketchybar_window_moved >/dev/null 2>&1 || true
+
+  "$YABAI_BIN" -m signal --add label=sketchybar_space_changed event=space_changed action="$SKETCHYBAR_BIN --trigger yabai_space_changed" >/dev/null 2>&1 || true
+  "$YABAI_BIN" -m signal --add label=sketchybar_space_created event=space_created action="$SKETCHYBAR_BIN --trigger yabai_spaces_changed" >/dev/null 2>&1 || true
+  "$YABAI_BIN" -m signal --add label=sketchybar_space_destroyed event=space_destroyed action="$SKETCHYBAR_BIN --trigger yabai_spaces_changed" >/dev/null 2>&1 || true
+  "$YABAI_BIN" -m signal --add label=sketchybar_window_created event=window_created action="$SKETCHYBAR_BIN --trigger yabai_window_changed" >/dev/null 2>&1 || true
+  "$YABAI_BIN" -m signal --add label=sketchybar_window_destroyed event=window_destroyed action="$SKETCHYBAR_BIN --trigger yabai_window_changed" >/dev/null 2>&1 || true
+  "$YABAI_BIN" -m signal --add label=sketchybar_window_focused event=window_focused action="$SKETCHYBAR_BIN --trigger yabai_window_changed" >/dev/null 2>&1 || true
+  "$YABAI_BIN" -m signal --add label=sketchybar_window_moved event=window_moved action="$SKETCHYBAR_BIN --trigger yabai_window_changed" >/dev/null 2>&1 || true
+fi
+
+. "${ITEM_DIR}/spaces.sh"
+. "${ITEM_DIR}/app.sh"
+. "${ITEM_DIR}/center.sh"
+. "${ITEM_DIR}/right.sh"
+
+[ -r "${ITEM_DIR}/local.sh" ] && . "${ITEM_DIR}/local.sh"
+[ -r "${CONFIG_DIR}/local.post.sh" ] && . "${CONFIG_DIR}/local.post.sh"
+
+"$SKETCHYBAR_BIN" --update
+"$SKETCHYBAR_BIN" --trigger yabai_window_changed

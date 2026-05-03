@@ -1,0 +1,72 @@
+#!/usr/bin/env sh
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+YABAI_BIN="${YABAI_BIN:-/opt/homebrew/bin/yabai}"
+[ -x "$YABAI_BIN" ] || YABAI_BIN="$(command -v yabai 2>/dev/null || printf '%s' /opt/homebrew/bin/yabai)"
+export YABAI_BIN
+
+# Full-yabai path. This is non-blocking until SIP and sudoers are configured.
+"$YABAI_BIN" -m signal --remove label=load_scripting_addition >/dev/null 2>&1
+"$YABAI_BIN" -m signal --add label=load_scripting_addition event=dock_did_restart action="sudo -n $YABAI_BIN --load-sa"
+sudo -n "$YABAI_BIN" --load-sa >/dev/null 2>&1 || true
+
+# Make room for SketchyBar and keep native UI out of the workflow surface.
+"$YABAI_BIN" -m config external_bar all:44:0
+"$YABAI_BIN" -m config menubar_opacity 0.0
+
+# Dwindle-like BSP defaults.
+"$YABAI_BIN" -m config layout bsp
+"$YABAI_BIN" -m config split_type auto
+"$YABAI_BIN" -m config split_ratio 0.50
+"$YABAI_BIN" -m config auto_balance off
+"$YABAI_BIN" -m config window_placement second_child
+"$YABAI_BIN" -m config window_insertion_point focused
+"$YABAI_BIN" -m config window_origin_display focused
+"$YABAI_BIN" -m config window_zoom_persist on
+
+# Focus and mouse behavior.
+"$YABAI_BIN" -m config focus_follows_mouse off
+"$YABAI_BIN" -m config mouse_follows_focus off
+"$YABAI_BIN" -m config mouse_modifier alt
+"$YABAI_BIN" -m config mouse_action1 move
+"$YABAI_BIN" -m config mouse_action2 resize
+"$YABAI_BIN" -m config mouse_drop_action swap
+
+# Gaps and padding. external_bar handles the top bar reservation.
+"$YABAI_BIN" -m config top_padding 4
+"$YABAI_BIN" -m config bottom_padding 8
+"$YABAI_BIN" -m config left_padding 8
+"$YABAI_BIN" -m config right_padding 8
+"$YABAI_BIN" -m config window_gap 7
+
+# Visuals. Some require the scripting addition; failures are harmless before SIP is ready.
+"$YABAI_BIN" -m config window_shadow float >/dev/null 2>&1 || true
+"$YABAI_BIN" -m config window_opacity off >/dev/null 2>&1 || true
+"$YABAI_BIN" -m config active_window_opacity 1.0 >/dev/null 2>&1 || true
+"$YABAI_BIN" -m config normal_window_opacity 0.92 >/dev/null 2>&1 || true
+"$YABAI_BIN" -m config window_animation_duration 0.0 >/dev/null 2>&1 || true
+"$YABAI_BIN" -m config insert_feedback_color 0xffffb454
+
+# Keep Super+number targets present and stable.
+if [ -x "$HOME/.config/yabai/scripts/ensure-spaces.sh" ]; then
+  "$HOME/.config/yabai/scripts/ensure-spaces.sh" 10 >/dev/null 2>&1 || true
+else
+  for space in 1 2 3 4 5 6 7 8 9 10; do
+    "$YABAI_BIN" -m space "$space" --label "ws$space" >/dev/null 2>&1 || true
+  done
+fi
+
+# Float system and utility windows that should not enter the tree.
+"$YABAI_BIN" -m rule --add label=system_settings app="^System Settings$" manage=off
+"$YABAI_BIN" -m rule --add label=activity_monitor app="^Activity Monitor$" manage=off
+"$YABAI_BIN" -m rule --add label=calculator app="^Calculator$" manage=off
+"$YABAI_BIN" -m rule --add label=raycast app="^Raycast$" manage=off
+"$YABAI_BIN" -m rule --add label=finder_dialogs app="^Finder$" title="^(Copy|Move|Info|Preferences|Get Info)" manage=off
+"$YABAI_BIN" -m rule --add label=ghostty_prefs app="^Ghostty$" title=".*Preferences.*" manage=off
+"$YABAI_BIN" -m rule --add label=picture_in_picture title=".*Picture in Picture.*" manage=off sticky=on >/dev/null 2>&1 || true
+
+for file in "$HOME"/.config/yabai/config.d/*.sh; do
+  [ -r "$file" ] && . "$file"
+done
+
+[ -r "$HOME/.config/yabai/yabairc.local" ] && . "$HOME/.config/yabai/yabairc.local"

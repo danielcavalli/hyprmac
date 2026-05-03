@@ -1,0 +1,16 @@
+[tools]
+python = "3.13"
+node = "lts"
+bun = "latest"
+zig = "latest"
+zls = "latest"
+
+[settings]
+experimental = true
+idiomatic_version_file_enable_tools = ["python", "node"]
+not_found_auto_install = true
+
+[env]
+NODE_OPTIONS = "--enable-source-maps"
+PYTHONUNBUFFERED = "1"
+UV_LINK_MODE = "copy"

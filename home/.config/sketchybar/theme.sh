@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+
+# Tahoe Retrofuture: calm glass, warm cream, muted neon accents.
+export FONT_TEXT="${FONT_TEXT:-JetBrainsMono Nerd Font}"
+export FONT_MONO="${FONT_MONO:-JetBrainsMono Nerd Font}"
+export BAR_HEIGHT="${BAR_HEIGHT:-34}"
+
+export BAR_BG="${BAR_BG:-0x26111018}"
+export TEXT="${TEXT:-0xfff8ead2}"
+export MUTED="${MUTED:-0xffb9a98f}"
+export CREAM="${CREAM:-0xfff8ead2}"
+export AMBER="${AMBER:-0xffffb454}"
+export ORANGE="${ORANGE:-0xffff7a45}"
+export ROSE="${ROSE:-0xffff5f87}"
+export LIME="${LIME:-0xffb8e986}"
+export CYAN="${CYAN:-0xff78dce8}"
+export BLUE="${BLUE:-0xff7aa2f7}"
+export PURPLE="${PURPLE:-0xffbb9af7}"
+export ITEM_BG="${ITEM_BG:-0x0af8ead2}"
+export ITEM_BG_HOT="${ITEM_BG_HOT:-0x18f8ead2}"
+export ITEM_BG_OK="${ITEM_BG_OK:-0x1678dce8}"
+export ITEM_BG_WARN="${ITEM_BG_WARN:-0x30ff5f87}"
+export ITEM_BG_ACTIVE="${ITEM_BG_ACTIVE:-0x36ffb454}"
+export ITEM_BORDER="${ITEM_BORDER:-0x0ff8ead2}"
+export ITEM_BORDER_ACTIVE="${ITEM_BORDER_ACTIVE:-0x72ffb454}"
+export ITEM_BORDER_WARN="${ITEM_BORDER_WARN:-0x72ff5f87}"
+export SHADOW="${SHADOW:-0x33111018}"

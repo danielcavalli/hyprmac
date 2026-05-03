@@ -1,0 +1,67 @@
+add_newline = true
+command_timeout = 1000
+
+format = """
+$time$directory$git_branch$git_status$conda$python$env_var$mise$nodejs$zig$cmd_duration
+$character"""
+
+[time]
+disabled = false
+style = "bold dimmed white"
+format = "[$time]($style) "
+time_format = "%H:%M"
+
+[directory]
+style = "bold cyan"
+truncation_length = 4
+truncate_to_repo = false
+
+[git_branch]
+symbol = "git:"
+style = "bold purple"
+format = "[$symbol$branch]($style) "
+
+[git_status]
+style = "bold yellow"
+format = "[$all_status$ahead_behind]($style) "
+
+[conda]
+ignore_base = false
+symbol = "conda:"
+style = "bold blue"
+format = "[$symbol$environment]($style) "
+
+[python]
+symbol = "py:"
+style = "bold blue"
+format = "[$symbol$version( $virtualenv)]($style) "
+
+[env_var.MISE_ENV]
+symbol = "mise:"
+style = "bold purple"
+format = "[$symbol$env_value]($style) "
+
+[mise]
+disabled = false
+symbol = "mise:"
+style = "bold purple"
+format = "[$symbol$health]($style) "
+
+[nodejs]
+symbol = "node:"
+style = "bold green"
+format = "[$symbol$version]($style) "
+
+[zig]
+symbol = "zig:"
+style = "bold yellow"
+format = "[$symbol$version]($style) "
+
+[cmd_duration]
+min_time = 2000
+style = "bold dimmed white"
+format = "[$duration]($style) "
+
+[character]
+success_symbol = "[>](bold green)"
+error_symbol = "[>](bold red)"

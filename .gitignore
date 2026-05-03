@@ -1,0 +1,14 @@
+.DS_Store
+*.bak
+*.local
+Brewfile.local
+home/.config/**/local.*
+home/.config/skhd/skhdrc.local
+home/.config/bash/local.env.sh
+home/.config/bash/local.rc.sh
+home/.config/ghostty/local.config
+.opencode/.gitignore
+.opencode/node_modules
+.opencode/package.json
+.opencode/package-lock.json
+.opencode/bun.lock

@@ -1,0 +1,9 @@
+# Copy to Brewfile.local for machine-specific additions.
+# The main Brewfile loads it last and .gitignore keeps it private.
+
+# cask "orbstack"
+# cask "visual-studio-code"
+# brew "go"
+# brew "rustup-init"
+# brew "postgresql@17"
+# brew "redis"

@@ -1,0 +1,2 @@
+# Copy to skhdrc.local for machine-specific hotkeys.
+# Keep valid skhd syntax here; skhd .load includes are not shell scripts.
