@@ -27,4 +27,20 @@ for cmd in bash git gh mise uv python node npm pnpm bun zig zls nvim lazygit bto
   fi
 done
 
+if path="$(runtime_path zed)"; then
+  printf 'ok: zed -> %s\n' "$path"
+elif [ -x /Applications/Zed.app/Contents/MacOS/cli ]; then
+  printf 'ok: zed -> %s\n' /Applications/Zed.app/Contents/MacOS/cli
+else
+  printf 'missing: zed\n'
+  missing=1
+fi
+
+if [ -r "$HOME/.config/zed/settings.json" ] && [ -r "$HOME/.config/zed/keymap.json" ]; then
+  printf 'ok: zed config -> %s\n' "$HOME/.config/zed"
+else
+  printf 'missing: zed config -> %s\n' "$HOME/.config/zed"
+  missing=1
+fi
+
 exit "$missing"

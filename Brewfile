@@ -61,6 +61,7 @@ brew "shellcheck"
 brew "shfmt"
 
 cask "ghostty"
+cask "zed"
 cask "raycast"
 cask "font-jetbrains-mono-nerd-font"
 

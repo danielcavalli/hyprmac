@@ -27,7 +27,12 @@ else
   missing=1
 fi
 
-if printf '%s\n' "$status" | sed -n '1p' | grep -q 'status: enabled'; then
+if printf '%s\n' "$status" | grep -q 'Filesystem Protections: disabled' \
+  && printf '%s\n' "$status" | grep -q 'Debugging Restrictions: disabled' \
+  && printf '%s\n' "$status" | grep -q 'NVRAM Protections: disabled' \
+  && printf '%s\n' "$status" | grep -q 'Boot-arg Restrictions: disabled'; then
+  printf 'ok: partial SIP state matches docs/sip-yabai.md\n'
+else
   printf 'missing: partial SIP changes from docs/sip-yabai.md\n'
   missing=1
 fi

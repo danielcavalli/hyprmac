@@ -40,11 +40,12 @@ Usage:
   hyprmac skhd restart|status
   hyprmac bar status|restart|toggle
   hyprmac power [menu|lock|sleep|restart|shutdown]
+  hyprmac installer inventory|gates|link [--backup]|overrides|state [path|init|show]
   hyprmac dev doctor
   hyprmac macos defaults|restore-ui
   hyprmac ports [port]
   hyprmac path
-  hyprmac docs hyprmac|design|keybindings|sip|troubleshooting
+  hyprmac docs hyprmac|installer|design|zed|keybindings|sip|troubleshooting
   hyprmac theme current
 
 Flags:
@@ -91,6 +92,19 @@ run_runtime() {
 
   path="$(runtime_path "$cmd")" || return 1
   "$path" "$@"
+}
+
+zed_path() {
+  if runtime_path zed; then
+    return 0
+  fi
+
+  if [ -x /Applications/Zed.app/Contents/MacOS/cli ]; then
+    printf '%s\n' /Applications/Zed.app/Contents/MacOS/cli
+    return 0
+  fi
+
+  return 1
 }
 
 dotfiles_root() {
@@ -725,6 +739,527 @@ dismiss_notify() {
   fi
 }
 
+installer_state_file() {
+  printf '%s\n' "${XDG_STATE_HOME:-$HYPRMAC_HOME/.local/state}/hyprmac-installer/state.md"
+}
+
+installer_expected_links() {
+  local root source rel
+  root="$(dotfiles_root)"
+
+  for source in \
+    "$root/home/.profile" \
+    "$root/home/.bash_profile" \
+    "$root/home/.bashrc" \
+    "$root/home/.config/starship.toml" \
+    "$root/home/.config/borders/bordersrc" \
+    "$root/home/.config/borders/bordersrc.local.example" \
+    "$root/home/.config/ghostty/config" \
+    "$root/home/.config/ghostty/local.config.example" \
+    "$root/home/.config/ghostty/themes/tahoe-retrofuture" \
+    "$root/home/.config/mise/config.toml" \
+    "$root/home/.config/skhd/skhdrc" \
+    "$root/home/.config/skhd/skhdrc.local.example" \
+    "$root/home/.config/yabai/yabairc" \
+    "$root/home/.config/yabai/config.d/README.md" \
+    "$root/home/.local/bin/hyprmac" \
+    "$root/home/.config/zed/keymap.json" \
+    "$root/home/.config/zed/settings.json"; do
+    [ -e "$source" ] || continue
+    rel="${source#"$root/home/"}"
+    printf '%s|%s/%s\n' "$source" "$HYPRMAC_HOME" "$rel"
+  done
+
+  for source in \
+    "$root"/home/.config/bash/env.d/*.sh \
+    "$root"/home/.config/bash/rc.d/*.sh \
+    "$root"/home/.config/hyprmac/checks.d/*.sh \
+    "$root"/home/.config/sketchybar/items/*.sh \
+    "$root"/home/.config/sketchybar/items/*.example \
+    "$root"/home/.config/sketchybar/plugins/*.sh \
+    "$root"/home/.config/sketchybar/local.*.sh.example \
+    "$root"/home/.config/sketchybar/sketchybarrc \
+    "$root"/home/.config/sketchybar/theme.sh \
+    "$root"/home/.config/yabai/scripts/*.sh; do
+    [ -e "$source" ] || continue
+    rel="${source#"$root/home/"}"
+    printf '%s|%s/%s\n' "$source" "$HYPRMAC_HOME" "$rel"
+  done
+}
+
+installer_local_overrides() {
+  cat <<EOF
+$HYPRMAC_HOME/.config/bash/local.env.sh
+$HYPRMAC_HOME/.config/bash/local.rc.sh
+$HYPRMAC_HOME/.config/borders/bordersrc.local
+$HYPRMAC_HOME/.config/ghostty/local.config
+$HYPRMAC_HOME/.config/sketchybar/local.pre.sh
+$HYPRMAC_HOME/.config/sketchybar/local.post.sh
+$HYPRMAC_HOME/.config/skhd/skhdrc.local
+$HYPRMAC_HOME/.config/yabai/yabairc.local
+$(dotfiles_root)/Brewfile.local
+EOF
+}
+
+installer_gate_line() {
+  local status="$1"
+  local item="$2"
+  local detail="${3:-}"
+
+  case "$status" in
+    fail) INSTALLER_FAILED=1 ;;
+    block) INSTALLER_BLOCKED=1 ;;
+  esac
+
+  if [ -n "$detail" ]; then
+    printf '%s: %s -> %s\n' "$status" "$item" "$detail"
+  else
+    printf '%s: %s\n' "$status" "$item"
+  fi
+}
+
+installer_print_output() {
+  local line
+  while IFS= read -r line; do
+    [ -n "$line" ] && printf '  %s\n' "$line"
+  done
+}
+
+canonical_path() {
+  local path="$1"
+  local dir base
+  dir="$(dirname "$path")"
+  base="$(basename "$path")"
+  [ -e "$path" ] || return 1
+  printf '%s/%s\n' "$(cd -P "$dir" && pwd)" "$base"
+}
+
+installer_state() {
+  local action="${1:-path}"
+  local state_file state_dir root now
+  state_file="$(installer_state_file)"
+
+  case "$action" in
+    path)
+      printf '%s\n' "$state_file"
+      ;;
+    show)
+      [ -r "$state_file" ] || fail "installer state does not exist: $state_file"
+      sed -n '1,220p' "$state_file"
+      ;;
+    init)
+      state_dir="$(dirname "$state_file")"
+      root="$(dotfiles_root)"
+      now="$(date '+%Y-%m-%d %H:%M:%S %Z')"
+      as_target_user mkdir -p "$state_dir"
+
+      if [ ! -e "$state_file" ]; then
+        as_target_user tee "$state_file" >/dev/null <<EOF
+# Hyprmac Solar Glass Installer State
+
+Repository: $root
+Target user: $HYPRMAC_USER
+Target home: $HYPRMAC_HOME
+Started: $now
+
+## Intent
+- Pending user customization notes
+
+## Completed
+- none
+
+## Blocked
+- none
+
+## Next
+- Run deterministic inventory and gates
+EOF
+        ok "created installer state: $state_file"
+      else
+        ok "installer state exists: $state_file"
+      fi
+      ;;
+    *)
+      fail "unknown installer state action: $action"
+      ;;
+  esac
+}
+
+installer_link_status() {
+  local source target actual source_real target_real optional failed=0
+
+  printf '\n==> gate 30 dotfile links\n'
+  while IFS='|' read -r source target; do
+    [ -n "$source" ] || continue
+    optional=0
+    case "$source" in
+      *.example) optional=1 ;;
+    esac
+
+    if [ ! -e "$source" ]; then
+      installer_gate_line fail "source missing" "$source"
+      failed=1
+    elif [ -L "$target" ]; then
+      actual="$(readlink "$target")"
+      if [ "$actual" = "$source" ]; then
+        installer_gate_line ok "$target" "$source"
+      elif source_real="$(canonical_path "$source")" && target_real="$(canonical_path "$target")" && [ "$source_real" = "$target_real" ]; then
+        installer_gate_line ok "$target" "$source via parent link"
+      else
+        installer_gate_line fail "$target" "symlink points to $actual"
+        failed=1
+      fi
+    elif [ -e "$target" ]; then
+      if source_real="$(canonical_path "$source")" && target_real="$(canonical_path "$target")" && [ "$source_real" = "$target_real" ]; then
+        installer_gate_line ok "$target" "$source via parent link"
+      else
+        installer_gate_line fail "$target" "exists and is not managed by this repo"
+        failed=1
+      fi
+    elif [ "$optional" -eq 1 ]; then
+      installer_gate_line warn "$target" "optional example not linked"
+    else
+      installer_gate_line fail "$target" "missing link to $source"
+      failed=1
+    fi
+  done <<EOF
+$(installer_expected_links)
+EOF
+
+  return "$failed"
+}
+
+installer_link_apply() {
+  local backup=0 stamp source target parent actual backup_path source_real target_real failed=0
+  case "${1:-}" in
+    --backup) backup=1 ;;
+    '') ;;
+    *) fail "usage: hyprmac installer link [--backup]" ;;
+  esac
+
+  stamp="$(date '+%Y%m%d%H%M%S')"
+
+  while IFS='|' read -r source target; do
+    [ -n "$source" ] || continue
+    parent="$(dirname "$target")"
+
+    if [ ! -e "$source" ]; then
+      warn "missing source: $source"
+      failed=1
+      continue
+    fi
+
+    as_target_user mkdir -p "$parent"
+
+    if [ -L "$target" ]; then
+      actual="$(readlink "$target")"
+      if [ "$actual" = "$source" ]; then
+        ok "link already correct: $target"
+        continue
+      fi
+      if source_real="$(canonical_path "$source")" && target_real="$(canonical_path "$target")" && [ "$source_real" = "$target_real" ]; then
+        ok "link already correct through parent directory: $target"
+        continue
+      fi
+    elif [ -e "$target" ]; then
+      if source_real="$(canonical_path "$source")" && target_real="$(canonical_path "$target")" && [ "$source_real" = "$target_real" ]; then
+        ok "link already correct through parent directory: $target"
+        continue
+      fi
+    elif [ ! -e "$target" ]; then
+      as_target_user ln -s "$source" "$target"
+      ok "linked $target -> $source"
+      continue
+    fi
+
+    if [ "$backup" -eq 1 ]; then
+      backup_path="$target.hyprmac-backup.$stamp"
+      as_target_user mv "$target" "$backup_path"
+      as_target_user ln -s "$source" "$target"
+      ok "backed up $target to $backup_path and linked repo source"
+    else
+      warn "refusing to replace existing target without --backup: $target"
+      failed=1
+    fi
+  done <<EOF
+$(installer_expected_links)
+EOF
+
+  return "$failed"
+}
+
+installer_overrides_apply() {
+  local file parent
+
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    parent="$(dirname "$file")"
+    as_target_user mkdir -p "$parent"
+    if [ -e "$file" ]; then
+      ok "override exists: $file"
+    else
+      as_target_user touch "$file"
+      ok "created empty override: $file"
+    fi
+  done <<EOF
+$(installer_local_overrides)
+EOF
+}
+
+installer_context_gate() {
+  local root state_file
+  root="$(dotfiles_root)"
+  state_file="$(installer_state_file)"
+
+  printf '\n==> gate 00 context\n'
+  if [ -d "$root" ]; then
+    installer_gate_line ok repository "$root"
+  else
+    installer_gate_line fail repository "$root"
+  fi
+
+  if [ -r "$root/Brewfile" ]; then
+    installer_gate_line ok Brewfile "$root/Brewfile"
+  else
+    installer_gate_line fail Brewfile "$root/Brewfile"
+  fi
+
+  if [ -r "$root/home/.local/bin/hyprmac" ]; then
+    installer_gate_line ok hyprmac "$root/home/.local/bin/hyprmac"
+  else
+    installer_gate_line fail hyprmac "$root/home/.local/bin/hyprmac"
+  fi
+
+  installer_gate_line ok "target user" "$HYPRMAC_USER"
+  installer_gate_line ok "target home" "$HYPRMAC_HOME"
+  installer_gate_line ok "state file" "$state_file"
+}
+
+installer_prereq_gate() {
+  local product version build arch clt
+  product="$(sw_vers -productName 2>/dev/null || true)"
+  version="$(sw_vers -productVersion 2>/dev/null || true)"
+  build="$(sw_vers -buildVersion 2>/dev/null || true)"
+  arch="$(uname -m 2>/dev/null || true)"
+
+  printf '\n==> gate 10 bootstrap prerequisites\n'
+  installer_gate_line ok macOS "$product $version ($build)"
+  if [ "$arch" = "arm64" ]; then
+    installer_gate_line ok arch "$arch"
+  else
+    installer_gate_line fail arch "$arch; Apple Silicon arm64 expected"
+  fi
+
+  if clt="$(xcode-select -p 2>/dev/null)"; then
+    installer_gate_line ok "Xcode Command Line Tools" "$clt"
+  else
+    installer_gate_line fail "Xcode Command Line Tools" "run xcode-select --install, then rerun sudo ./install.sh"
+  fi
+
+  if need brew; then
+    installer_gate_line ok Homebrew "$(command -v brew)"
+  else
+    installer_gate_line fail Homebrew "install from https://brew.sh before package gates"
+  fi
+
+  if need opencode; then
+    installer_gate_line ok OpenCode "$(command -v opencode)"
+  else
+    installer_gate_line fail OpenCode "install with brew install opencode"
+  fi
+}
+
+installer_package_gate() {
+  local root output
+  root="$(dotfiles_root)"
+
+  printf '\n==> gate 20 packages\n'
+  if ! need brew; then
+    installer_gate_line fail "brew bundle" "Homebrew is missing"
+    return 1
+  fi
+
+  if output="$(as_target_user env HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ENV_HINTS=1 brew bundle check --file "$root/Brewfile" --verbose 2>&1)"; then
+    installer_gate_line ok "brew bundle" "all Brewfile dependencies are satisfied"
+  else
+    installer_gate_line fail "brew bundle" "missing dependencies; run brew bundle --file $root/Brewfile after approval"
+    printf '%s\n' "$output" | installer_print_output
+  fi
+}
+
+installer_mise_gate() {
+  local output
+
+  printf '\n==> gate 40 mise runtimes\n'
+  if ! need mise; then
+    installer_gate_line fail mise "missing; package gate must install mise"
+    return 1
+  fi
+
+  if output="$(as_target_user mise doctor 2>&1)"; then
+    installer_gate_line ok "mise doctor" "passed"
+  else
+    installer_gate_line fail "mise doctor" "mise install or shell activation is incomplete"
+    printf '%s\n' "$output" | installer_print_output
+  fi
+}
+
+installer_service_gate() {
+  local cmd label failed=0
+
+  printf '\n==> gate 50 services and GUI stack\n'
+  for cmd in yabai skhd sketchybar borders jq; do
+    if need "$cmd"; then
+      installer_gate_line ok "$cmd" "$(command -v "$cmd")"
+    else
+      installer_gate_line fail "$cmd" "missing package"
+      failed=1
+    fi
+  done
+
+  for label in com.asmvik.yabai com.koekeishiya.skhd homebrew.mxcl.sketchybar homebrew.mxcl.borders; do
+    if launchctl print "gui/${HYPRMAC_UID}/${label}" >/dev/null 2>&1; then
+      installer_gate_line ok "launchd $label" "running"
+    else
+      installer_gate_line fail "launchd $label" "not running"
+      failed=1
+    fi
+  done
+
+  if need yabai && as_target_user yabai -m query --spaces >/dev/null 2>&1; then
+    installer_gate_line ok "yabai query" "space query works"
+  else
+    installer_gate_line fail "yabai query" "cannot query spaces"
+    failed=1
+  fi
+
+  return "$failed"
+}
+
+installer_sip_gate() {
+  local status boot_args active_boot_args failed=0
+  status="$(csrutil status 2>/dev/null || true)"
+  boot_args="$(current_boot_args)"
+  active_boot_args="$(sysctl -n kern.bootargs 2>/dev/null || true)"
+
+  printf '\n==> gate 60 full-yabai security\n'
+  if printf '%s\n' "$status" | grep -q 'Filesystem Protections: disabled' \
+    && printf '%s\n' "$status" | grep -q 'Debugging Restrictions: disabled' \
+    && printf '%s\n' "$status" | grep -q 'NVRAM Protections: disabled' \
+    && printf '%s\n' "$status" | grep -q 'Boot-arg Restrictions: disabled'; then
+    installer_gate_line ok "Recovery SIP state" "partial SIP state matches docs/sip-yabai.md"
+  else
+    installer_gate_line block "Recovery SIP state" "full yabai requires docs/sip-yabai.md partial SIP step"
+    failed=1
+  fi
+
+  if sip_has_arm64e_boot_arg "$boot_args"; then
+    installer_gate_line ok "nvram boot-args" "$boot_args"
+  else
+    installer_gate_line block "nvram boot-args" "missing -arm64e_preview_abi; run hyprmac sip enable-arm64e after approval"
+    failed=1
+  fi
+
+  if sip_has_arm64e_boot_arg "$active_boot_args"; then
+    installer_gate_line ok "active boot-args" "$active_boot_args"
+  else
+    installer_gate_line block "active boot-args" "missing -arm64e_preview_abi; reboot after persisting the arg"
+    failed=1
+  fi
+
+  return "$failed"
+}
+
+installer_validation_gate() {
+  local root failed=0
+  root="$(dotfiles_root)"
+
+  printf '\n==> gate 70 repository validation\n'
+  if bash -n "$root/home/.bashrc" "$root/home/.bash_profile" "$root/home/.profile" "$root/home/.local/bin/hyprmac"; then
+    installer_gate_line ok "shell syntax" "bash entrypoints and hyprmac"
+  else
+    installer_gate_line fail "shell syntax" "bash -n failed"
+    failed=1
+  fi
+
+  if [ -r "$root/home/.config/yabai/scripts/resize-window.sh" ] && bash -n "$root/home/.config/yabai/scripts/resize-window.sh"; then
+    installer_gate_line ok "yabai scripts" "resize helper syntax"
+  else
+    installer_gate_line fail "yabai scripts" "resize helper syntax failed"
+    failed=1
+  fi
+
+  if need jq && jq empty "$root/home/.config/zed/settings.json" "$root/home/.config/zed/keymap.json" >/dev/null 2>&1; then
+    installer_gate_line ok "Zed JSON" "settings.json and keymap.json"
+  else
+    installer_gate_line fail "Zed JSON" "jq validation failed or jq missing"
+    failed=1
+  fi
+
+  return "$failed"
+}
+
+installer_dev_gate() {
+  printf '\n==> gate 80 developer tools\n'
+  if dev_doctor; then
+    installer_gate_line ok "hyprmac dev doctor" "passed"
+  else
+    installer_gate_line fail "hyprmac dev doctor" "missing developer tools or editor config"
+  fi
+}
+
+installer_gate_report() {
+  INSTALLER_FAILED=0
+  INSTALLER_BLOCKED=0
+
+  installer_context_gate
+  installer_prereq_gate
+  installer_package_gate || true
+  installer_link_status || true
+  installer_mise_gate || true
+  installer_service_gate || true
+  installer_sip_gate || true
+  installer_validation_gate || true
+  installer_dev_gate || true
+
+  printf '\n==> installer result\n'
+  if [ "$INSTALLER_BLOCKED" -eq 1 ]; then
+    printf 'block: one or more gates require Recovery, reboot, or explicit approval\n'
+    return 2
+  fi
+  if [ "$INSTALLER_FAILED" -eq 1 ]; then
+    printf 'fail: one or more gates need installation or repair\n'
+    return 1
+  fi
+
+  printf 'ok: all deterministic installer gates passed\n'
+}
+
+installer_inventory() {
+  installer_gate_report || true
+  printf '\n==> installer state\n'
+  installer_state path
+  if [ -r "$(installer_state_file)" ]; then
+    installer_gate_line ok "state file" "exists"
+  else
+    installer_gate_line fail "state file" "not initialized"
+  fi
+}
+
+installer_cmd() {
+  local action="${1:-inventory}"
+  shift || true
+
+  case "$action" in
+    inventory|status) installer_inventory ;;
+    gates|check) installer_gate_report ;;
+    link) installer_link_apply "${1:-}" ;;
+    overrides) installer_overrides_apply ;;
+    state) installer_state "${1:-path}" ;;
+    *) fail "unknown installer action: $action" ;;
+  esac
+}
+
 run_checks() {
   local found=0
   local failed=0
@@ -1051,6 +1586,20 @@ dev_doctor() {
     fi
   done
 
+  if path="$(zed_path)"; then
+    printf 'ok: zed -> %s\n' "$path"
+  else
+    printf 'missing: zed\n'
+    missing=1
+  fi
+
+  if [ -r "$HYPRMAC_HOME/.config/zed/settings.json" ] && [ -r "$HYPRMAC_HOME/.config/zed/keymap.json" ]; then
+    printf 'ok: zed config -> %s\n' "$HYPRMAC_HOME/.config/zed"
+  else
+    printf 'missing: zed config -> %s\n' "$HYPRMAC_HOME/.config/zed"
+    missing=1
+  fi
+
   printf '\nVersions:\n'
   git --version || true
   gh --version 2>/dev/null | sed -n '1p' || true
@@ -1062,6 +1611,9 @@ dev_doctor() {
   run_runtime bun --version 2>/dev/null || true
   run_runtime zig version 2>/dev/null || true
   run_runtime zls --version 2>/dev/null || true
+  if path="$(zed_path)"; then
+    "$path" --version 2>/dev/null || true
+  fi
 
   return "$missing"
 }
@@ -1108,6 +1660,7 @@ show_path() {
 theme_current() {
   printf 'theme: solar-glass\n'
   printf 'ghostty: ~/.config/ghostty/themes/tahoe-retrofuture\n'
+  printf 'zed: ~/.config/zed/settings.json\n'
   printf 'sketchybar: ~/.config/sketchybar/theme.sh\n'
 }
 
@@ -1117,7 +1670,9 @@ docs_open() {
 
   case "$name" in
     hyprmac|cli|command) file="docs/hyprmac.md" ;;
+    installer|install|pipeline) file="docs/installer-agent.md" ;;
     design|theme|tokens) file="docs/design-system.md" ;;
+    zed|editor) file="docs/zed.md" ;;
     keybindings) file="docs/keybindings.md" ;;
     sip|yabai) file="docs/sip-yabai.md" ;;
     troubleshooting|trouble) file="docs/troubleshooting.md" ;;
@@ -1234,6 +1789,7 @@ main() {
       esac
       ;;
     power) power_menu "${1:-menu}" ;;
+    installer) installer_cmd "$@" ;;
     dev)
       case "${1:-doctor}" in
         doctor) dev_doctor ;;

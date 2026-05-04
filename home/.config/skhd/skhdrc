@@ -14,6 +14,7 @@ alt + shift - b : /usr/bin/open -na Helium
 alt + shift - return : /usr/bin/open -na Safari
 alt + shift - f : /usr/bin/open -na Finder
 alt + shift - n : /Applications/Ghostty.app/Contents/MacOS/ghostty -e /opt/homebrew/bin/bash -lc 'nvim'
+alt + shift - z : /usr/bin/open -na Zed
 alt + shift - d : /Applications/Ghostty.app/Contents/MacOS/ghostty -e /opt/homebrew/bin/bash -lc 'lazydocker'
 alt + shift - o : /usr/bin/open -na Obsidian
 alt + shift - m : /usr/bin/open -na Spotify || /usr/bin/open -na Music

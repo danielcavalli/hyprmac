@@ -108,6 +108,11 @@ hyprmac bar status
 hyprmac bar toggle
 hyprmac power
 hyprmac macos defaults
+hyprmac installer inventory
+hyprmac installer gates
+hyprmac installer link
+hyprmac installer overrides
+hyprmac installer state path
 hyprmac dev doctor
 hyprmac docs design
 hyprmac theme current

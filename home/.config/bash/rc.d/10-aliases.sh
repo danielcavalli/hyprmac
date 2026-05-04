@@ -12,6 +12,18 @@ if command -v bat >/dev/null 2>&1; then
   alias cat='bat --paging=never'
 fi
 
+if ! command -v zed >/dev/null 2>&1 && [ -x /Applications/Zed.app/Contents/MacOS/cli ]; then
+  zed() {
+    /Applications/Zed.app/Contents/MacOS/cli "$@"
+  }
+fi
+
+if command -v zed >/dev/null 2>&1; then
+  alias ze='zed'
+  alias zedp='zed .'
+  alias zedw='zed --wait'
+fi
+
 alias ..='cd ..'
 alias ...='cd ../..'
 alias c='clear'

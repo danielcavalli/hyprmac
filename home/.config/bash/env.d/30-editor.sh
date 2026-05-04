@@ -4,6 +4,13 @@ else
   export EDITOR="${EDITOR:-vi}"
 fi
 
-export VISUAL="${VISUAL:-$EDITOR}"
+if command -v zed >/dev/null 2>&1; then
+  export VISUAL="${VISUAL:-zed --wait}"
+elif [ -x /Applications/Zed.app/Contents/MacOS/cli ]; then
+  export VISUAL="${VISUAL:-/Applications/Zed.app/Contents/MacOS/cli --wait}"
+else
+  export VISUAL="${VISUAL:-$EDITOR}"
+fi
+
 export PAGER="${PAGER:-less}"
 export LESS="${LESS:--FRX}"

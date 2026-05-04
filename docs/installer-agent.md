@@ -41,11 +41,19 @@ For non-interactive mode:
 opencode run --agent installer --dir . "Start installation"
 ```
 
-The agent starts with a short onboarding conversation, not a batch of commands. First it explains the workstation and `hyprmac`, asks what you care about, and offers to run a read-only check.
+The agent starts with a short onboarding conversation, not a batch of commands. First it explains the workstation and `hyprmac`, asks what you care about, and offers to run deterministic installer inventory.
 
 The agent profile is intentionally trusted for installation work: shell execution and external directory access are pre-approved so inventory commands, `hyprmac` commands, Homebrew/service checks, and `~/.local/state/hyprmac-installer/` reads do not create repeated OpenCode permission prompts. The agent still asks conversationally before invasive or destructive work.
 
-After you approve that check, it confirms:
+After you approve that check, it uses the repository's installer surface as the source of truth:
+
+```sh
+HYPRMAC_DOTFILES_DIR="$PWD" ./home/.local/bin/hyprmac installer state init
+HYPRMAC_DOTFILES_DIR="$PWD" ./home/.local/bin/hyprmac installer inventory
+HYPRMAC_DOTFILES_DIR="$PWD" ./home/.local/bin/hyprmac installer gates
+```
+
+Then it confirms:
 
 - what already exists
 - what is missing
@@ -71,6 +79,39 @@ opencode . --agent installer
 ```
 
 The agent will read the state file, re-check the actual machine state, and continue.
+
+## Deterministic Gates
+
+`hyprmac installer gates` is the completion contract. The agent should not guess from loose command output or assume state from a previous conversation.
+
+Gate statuses mean:
+
+- `ok`: installed, linked, running, or validated.
+- `warn`: non-blocking optional material.
+- `fail`: fixable in the normal macOS session after approval.
+- `block`: stop for Recovery, reboot, or explicit approval.
+
+The fixed gate order is:
+
+- `gate 00 context`: repository, target user, target home, state file path.
+- `gate 10 bootstrap prerequisites`: macOS, architecture, Xcode Command Line Tools, Homebrew, OpenCode.
+- `gate 20 packages`: Brewfile satisfaction via Homebrew as the target user.
+- `gate 30 dotfile links`: repo-managed files linked into the target home without replacing unmanaged files.
+- `gate 40 mise runtimes`: `mise doctor` readiness.
+- `gate 50 services and GUI stack`: yabai, skhd, SketchyBar, borders, launchd, and yabai query readiness.
+- `gate 60 full-yabai security`: partial SIP state and arm64e boot-arg readiness.
+- `gate 70 repository validation`: shell syntax and Zed JSON.
+- `gate 80 developer tools`: shell/dev runtimes, Neovim, Zed, and tracked Zed config.
+
+Installer actions map directly to gates:
+
+- Packages: `brew bundle --file ./Brewfile`.
+- Dotfiles: `hyprmac installer link`, or `hyprmac installer link --backup` only after approval.
+- Local overrides: `hyprmac installer overrides`.
+- Runtimes: `mise install`.
+- macOS defaults: `hyprmac macos defaults`.
+- Services: start yabai, skhd, SketchyBar, and borders, then `hyprmac reload`.
+- Full yabai: follow `docs/sip-yabai.md`, then `hyprmac sip enable-arm64e`, reboot if needed, `hyprmac yabai sudoers`, `hyprmac yabai load-sa`, and `hyprmac yabai ensure-spaces 10`.
 
 ## What The Agent Explains
 

@@ -1,0 +1,65 @@
+{
+  "base_keymap": "VSCode",
+  "auto_update": false,
+  "load_direnv": "direct",
+  "telemetry": {
+    "diagnostics": false,
+    "metrics": false
+  },
+  "theme": {
+    "mode": "system",
+    "light": "Ayu Light",
+    "dark": "Ayu Mirage"
+  },
+  "ui_font_family": "SF Pro Text",
+  "buffer_font_family": "JetBrainsMono Nerd Font",
+  "ui_font_size": 15,
+  "buffer_font_size": 14,
+  "cursor_blink": false,
+  "soft_wrap": "editor_width",
+  "show_whitespaces": "selection",
+  "tab_size": 2,
+  "hard_tabs": false,
+  "format_on_save": "on",
+  "autosave": {
+    "after_delay": {
+      "milliseconds": 1000
+    }
+  },
+  "terminal": {
+    "dock": "bottom",
+    "working_directory": "current_project_directory",
+    "shell": {
+      "with_arguments": {
+        "program": "/opt/homebrew/bin/bash",
+        "args": ["--login"]
+      }
+    }
+  },
+  "languages": {
+    "JSON": {
+      "tab_size": 2,
+      "format_on_save": "on"
+    },
+    "Markdown": {
+      "soft_wrap": "editor_width",
+      "format_on_save": "off"
+    },
+    "Python": {
+      "tab_size": 4,
+      "format_on_save": "on"
+    },
+    "Shell Script": {
+      "tab_size": 2,
+      "format_on_save": "on"
+    },
+    "TypeScript": {
+      "tab_size": 2,
+      "format_on_save": "on"
+    },
+    "Zig": {
+      "tab_size": 4,
+      "format_on_save": "on"
+    }
+  }
+}

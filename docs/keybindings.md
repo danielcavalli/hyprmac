@@ -16,6 +16,7 @@ Super+Shift+B             Open Helium
 Super+Shift+Return        Open Safari
 Super+Shift+F             Open Finder
 Super+Shift+N             Open Neovim in Ghostty
+Super+Shift+Z             Open Zed
 Super+Shift+D             Open LazyDocker in Ghostty
 Super+Shift+O             Open Obsidian
 Super+Shift+M             Open Spotify, fallback Music
