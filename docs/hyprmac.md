@@ -109,4 +109,6 @@ hyprmac bar toggle
 hyprmac power
 hyprmac macos defaults
 hyprmac dev doctor
+hyprmac docs design
+hyprmac theme current
 ```

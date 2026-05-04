@@ -11,7 +11,7 @@ export YABAI_BIN
 sudo -n "$YABAI_BIN" --load-sa >/dev/null 2>&1 || true
 
 # Make room for SketchyBar and keep native UI out of the workflow surface.
-"$YABAI_BIN" -m config external_bar all:44:0
+"$YABAI_BIN" -m config external_bar all:46:0
 "$YABAI_BIN" -m config menubar_opacity 0.0
 
 # Dwindle-like BSP defaults.
@@ -33,11 +33,11 @@ sudo -n "$YABAI_BIN" --load-sa >/dev/null 2>&1 || true
 "$YABAI_BIN" -m config mouse_drop_action swap
 
 # Gaps and padding. external_bar handles the top bar reservation.
-"$YABAI_BIN" -m config top_padding 4
-"$YABAI_BIN" -m config bottom_padding 8
-"$YABAI_BIN" -m config left_padding 8
-"$YABAI_BIN" -m config right_padding 8
-"$YABAI_BIN" -m config window_gap 7
+"$YABAI_BIN" -m config top_padding 5
+"$YABAI_BIN" -m config bottom_padding 10
+"$YABAI_BIN" -m config left_padding 10
+"$YABAI_BIN" -m config right_padding 10
+"$YABAI_BIN" -m config window_gap 10
 
 # Visuals. Some require the scripting addition; failures are harmless before SIP is ready.
 "$YABAI_BIN" -m config window_shadow float >/dev/null 2>&1 || true

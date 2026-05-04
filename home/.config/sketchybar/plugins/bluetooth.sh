@@ -5,7 +5,7 @@
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/sketchybar"
 DEVICE_CACHE="$STATE_DIR/bluetooth-devices"
-ITEM_NAME="${NAME:-bluetooth}"
+ITEM_NAME="${BLUETOOTH_ITEM:-bluetooth}"
 TAB="$(printf '\t')"
 
 has_blueutil() {
@@ -79,7 +79,7 @@ populate_popup() {
   fi
 
   "$SKETCHYBAR_BIN" --set bluetooth.title icon="$title_icon" icon.color="$title_color" label="$title" \
-    --set bluetooth.toggle drawing=on icon="󰔡" icon.color="$ROSE" label="Turn Bluetooth Off"
+    --set bluetooth.toggle drawing=on icon="󰔡" icon.color="$ORANGE" label="Turn Bluetooth Off"
 
   blueutil --paired --format json 2>/dev/null \
     | jq -r '.[] | [.address, .name, (.connected | tostring)] | @tsv' 2>/dev/null \
@@ -95,13 +95,13 @@ populate_popup() {
       color="$CYAN"
       label="$name"
       background="$ITEM_BG_OK"
-      border="$CYAN"
+      border="$ITEM_BORDER_OK"
     else
       icon="󰂯"
       color="$MUTED"
       label="$name"
-      background=0x08f8ead2
-      border=0x0df8ead2
+      background="$POPUP_ITEM_BG"
+      border="$POPUP_ITEM_BORDER"
     fi
 
     "$SKETCHYBAR_BIN" --set "bluetooth.device.${slot}" \
@@ -122,8 +122,8 @@ populate_popup() {
       icon.color="$MUTED" \
       label="No paired devices" \
       label.max_chars=24 \
-      background.color=0x05f8ead2 \
-      background.border_color=0x08f8ead2
+      background.color="$POPUP_MUTED_BG" \
+      background.border_color="$POPUP_MUTED_BORDER"
     slot=2
   fi
 

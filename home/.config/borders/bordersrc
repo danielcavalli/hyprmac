@@ -2,10 +2,11 @@
 
 options=(
   style=round
-  width=5.0
+  width=6.0
   hidpi=on
+  ax_focus=on
   active_color=0xffffb454
-  inactive_color=0x55f8ead2
+  inactive_color=0x44ffead2
 )
 
 [ -r "$HOME/.config/borders/bordersrc.local" ] && . "$HOME/.config/borders/bordersrc.local"

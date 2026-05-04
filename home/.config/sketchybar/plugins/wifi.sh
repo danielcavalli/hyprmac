@@ -5,7 +5,7 @@
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/sketchybar"
 NETWORK_CACHE="$STATE_DIR/wifi-networks"
-ITEM_NAME="${NAME:-wifi}"
+ITEM_NAME="${WIFI_ITEM:-wifi}"
 
 wifi_device() {
   networksetup -listallhardwareports 2>/dev/null | awk '/Wi-Fi|AirPort/{getline; print $2; exit}'
@@ -102,7 +102,7 @@ populate_popup() {
   fi
 
   "$SKETCHYBAR_BIN" --set wifi.title icon="$title_icon" icon.color="$title_color" label="$title" \
-    --set wifi.toggle drawing=on icon="󰔡" icon.color="$ROSE" label="Turn Wi-Fi Off" \
+    --set wifi.toggle drawing=on icon="󰔡" icon.color="$ORANGE" label="Turn Wi-Fi Off" \
     --set wifi.refresh drawing=on
 
   networks="$(saved_networks "$device")"
@@ -117,12 +117,12 @@ populate_popup() {
       icon="󰤨"
       color="$LIME"
       background="$ITEM_BG_OK"
-      border="$CYAN"
+      border="$ITEM_BORDER_OK"
     else
       icon="󰤯"
       color="$MUTED"
-      background=0x08f8ead2
-      border=0x0df8ead2
+      background="$POPUP_ITEM_BG"
+      border="$POPUP_ITEM_BORDER"
     fi
 
     "$SKETCHYBAR_BIN" --set "wifi.network.${slot}" \
@@ -145,8 +145,8 @@ EOF
       icon.color="$MUTED" \
       label="No saved networks" \
       label.max_chars=24 \
-      background.color=0x05f8ead2 \
-      background.border_color=0x08f8ead2
+      background.color="$POPUP_MUTED_BG" \
+      background.border_color="$POPUP_MUTED_BORDER"
     slot=2
   fi
 

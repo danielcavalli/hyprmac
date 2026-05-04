@@ -39,7 +39,7 @@ case "$mode" in
 
       if [ "${count:-0}" -gt 0 ]; then
         label="$count"
-        color="$PURPLE"
+        color="$AMBER"
       else
         label=""
         color="$MUTED"

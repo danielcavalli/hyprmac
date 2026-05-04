@@ -79,9 +79,9 @@ Super+Alt+Shift+Arrow     Move current workspace to adjacent display
 
 ```text
 Super+Ctrl+L              Lock screen
-Super+Ctrl+A              Sound settings
-Super+Ctrl+B              Bluetooth settings
-Super+Ctrl+W              Wi-Fi settings
+Super+Ctrl+A              Toggle Sound popup, settings fallback
+Super+Ctrl+B              Toggle Bluetooth popup, settings fallback
+Super+Ctrl+W              Toggle Wi-Fi popup, settings fallback
 Super+Ctrl+T              Activity Monitor
 Super+Ctrl+C              macOS screenshot UI
 Super+Ctrl+Space          Raycast background/menu placeholder

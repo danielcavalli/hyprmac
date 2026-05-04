@@ -16,18 +16,18 @@ reset_menu() {
     icon.color="$BLUE" \
     label="Lock" \
     label.color="$TEXT" \
-    background.color=0x08f8ead2 \
-    background.border_color=0x0df8ead2 \
+    background.color="$POPUP_ITEM_BG" \
+    background.border_color="$POPUP_ITEM_BORDER" \
     click_script="\"${POWER_SCRIPT}\" lock"
 
   set_item power.sleep \
     drawing=on \
     icon="󰒲" \
-    icon.color="$PURPLE" \
+    icon.color="$BLUE" \
     label="Sleep" \
     label.color="$TEXT" \
-    background.color=0x08f8ead2 \
-    background.border_color=0x0df8ead2 \
+    background.color="$POPUP_ITEM_BG" \
+    background.border_color="$POPUP_ITEM_BORDER" \
     click_script="\"${POWER_SCRIPT}\" sleep"
 
   set_item power.restart \
@@ -36,8 +36,8 @@ reset_menu() {
     icon.color="$AMBER" \
     label="Restart" \
     label.color="$TEXT" \
-    background.color=0x08f8ead2 \
-    background.border_color=0x0df8ead2 \
+    background.color="$POPUP_ITEM_BG" \
+    background.border_color="$POPUP_ITEM_BORDER" \
     click_script="\"${POWER_SCRIPT}\" confirm-restart"
 
   set_item power.shutdown \
@@ -46,8 +46,8 @@ reset_menu() {
     icon.color="$ROSE" \
     label="Shut Down" \
     label.color="$TEXT" \
-    background.color=0x08f8ead2 \
-    background.border_color=0x0df8ead2 \
+    background.color="$POPUP_ITEM_BG" \
+    background.border_color="$POPUP_ITEM_BORDER" \
     click_script="\"${POWER_SCRIPT}\" confirm-shutdown"
 }
 
@@ -57,8 +57,8 @@ confirm_restart() {
     icon="󰜺" \
     icon.color="$MUTED" \
     label="Cancel" \
-    background.color=0x08f8ead2 \
-    background.border_color=0x0df8ead2 \
+    background.color="$POPUP_ITEM_BG" \
+    background.border_color="$POPUP_ITEM_BORDER" \
     click_script="\"${POWER_SCRIPT}\" cancel"
 
   set_item power.sleep drawing=off
@@ -68,8 +68,8 @@ confirm_restart() {
     icon="󰑐" \
     icon.color="$AMBER" \
     label="Restart Now" \
-    background.color=0x30ffb454 \
-    background.border_color=0x72ffb454 \
+    background.color="$ITEM_BG_CONFIRM" \
+    background.border_color="$ITEM_BORDER_CONFIRM" \
     click_script="\"${POWER_SCRIPT}\" restart-now"
 
   set_item power.shutdown drawing=off
@@ -81,8 +81,8 @@ confirm_shutdown() {
     icon="󰜺" \
     icon.color="$MUTED" \
     label="Cancel" \
-    background.color=0x08f8ead2 \
-    background.border_color=0x0df8ead2 \
+    background.color="$POPUP_ITEM_BG" \
+    background.border_color="$POPUP_ITEM_BORDER" \
     click_script="\"${POWER_SCRIPT}\" cancel"
 
   set_item power.sleep drawing=off

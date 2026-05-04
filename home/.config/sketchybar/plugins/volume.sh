@@ -7,7 +7,7 @@
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/sketchybar"
 OUTPUT_CACHE="$STATE_DIR/audio-outputs"
 INPUT_CACHE="$STATE_DIR/audio-inputs"
-ITEM_NAME="${NAME:-volume}"
+ITEM_NAME="${VOLUME_ITEM:-volume}"
 
 current_volume() {
   osascript -e 'output volume of (get volume settings)' 2>/dev/null || printf '0'
@@ -73,12 +73,12 @@ populate_outputs() {
       icon="󰓃"
       color="$CYAN"
       background="$ITEM_BG_OK"
-      border="$CYAN"
+      border="$ITEM_BORDER_OK"
     else
       icon="󰓃"
       color="$MUTED"
-      background=0x08f8ead2
-      border=0x0df8ead2
+      background="$POPUP_ITEM_BG"
+      border="$POPUP_ITEM_BORDER"
     fi
 
     "$SKETCHYBAR_BIN" --set "volume.output.${slot}" \
@@ -99,8 +99,8 @@ populate_outputs() {
       icon.color="$MUTED" \
       label="No output devices" \
       label.max_chars=24 \
-      background.color=0x05f8ead2 \
-      background.border_color=0x08f8ead2
+      background.color="$POPUP_MUTED_BG" \
+      background.border_color="$POPUP_MUTED_BORDER"
     slot=2
   fi
 
@@ -121,14 +121,14 @@ populate_inputs() {
 
     if [ "$device" = "$current" ]; then
       icon="󰍬"
-      color="$PURPLE"
+      color="$BLUE"
       background="$ITEM_BG_OK"
-      border="$PURPLE"
+      border="$ITEM_BORDER_OK"
     else
       icon="󰍬"
       color="$MUTED"
-      background=0x08f8ead2
-      border=0x0df8ead2
+      background="$POPUP_ITEM_BG"
+      border="$POPUP_ITEM_BORDER"
     fi
 
     "$SKETCHYBAR_BIN" --set "volume.input.${slot}" \
@@ -149,8 +149,8 @@ populate_inputs() {
       icon.color="$MUTED" \
       label="No input devices" \
       label.max_chars=24 \
-      background.color=0x05f8ead2 \
-      background.border_color=0x08f8ead2
+      background.color="$POPUP_MUTED_BG" \
+      background.border_color="$POPUP_MUTED_BORDER"
     slot=2
   fi
 
@@ -193,7 +193,9 @@ populate_popup() {
   [ -n "$output" ] && title="$title - $output"
 
   "$SKETCHYBAR_BIN" --set volume.title icon="$icon" icon.color="$color" label="$title" label.max_chars=25 \
-    --set volume.mute label="$mute_label" \
+    --set volume.down drawing=on icon="󰝞" icon.color="$BLUE" label="Volume -10" label.drawing=on background.color="$POPUP_ITEM_BG" background.border_color="$POPUP_ITEM_BORDER" background.drawing=on \
+    --set volume.mute drawing=on icon="󰖁" icon.color="$ORANGE" label="$mute_label" label.drawing=on background.color="$POPUP_ITEM_BG" background.border_color="$POPUP_ITEM_BORDER" background.drawing=on \
+    --set volume.up drawing=on icon="󰝝" icon.color="$AMBER" label="Volume +10" label.drawing=on background.color="$POPUP_ITEM_BG" background.border_color="$POPUP_ITEM_BORDER" background.drawing=on \
     --set volume.output_header drawing=on \
     --set volume.input_header drawing=on
 

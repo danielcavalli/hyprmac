@@ -1,6 +1,9 @@
 .DS_Store
 *.bak
 *.local
+!home/.local/
+!home/.local/bin/
+!home/.local/bin/hyprmac
 Brewfile.local
 home/.config/**/local.*
 home/.config/skhd/skhdrc.local

@@ -1,4 +1,4 @@
-# Ghostty: Tahoe Retrofuture glass terminal.
+# Ghostty: Solar Glass smoked bronze terminal.
 
 theme = tahoe-retrofuture
 
@@ -6,7 +6,7 @@ font-family = "JetBrainsMono Nerd Font"
 font-size = 14
 font-thicken = true
 
-background-opacity = 0.78
+background-opacity = 0.80
 background-opacity-cells = true
 background-blur = macos-glass-regular
 

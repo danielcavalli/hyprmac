@@ -36,4 +36,4 @@ else
   label="$title"
 fi
 
-"$SKETCHYBAR_BIN" --set "$NAME" drawing=on icon.color="$ROSE" label="$label" label.drawing=on background.drawing=on
+"$SKETCHYBAR_BIN" --set "$NAME" drawing=on icon.color="$AMBER" label="$label" label.drawing=on background.drawing=on

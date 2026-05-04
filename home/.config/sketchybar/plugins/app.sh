@@ -50,7 +50,7 @@ case "$app" in
     ;;
   Code|Cursor|Zed|Neovide)
     icon="󰨞"
-    color="$PURPLE"
+    color="$BLUE"
     ;;
   Slack|Discord|Messages)
     icon="󰍡"
@@ -62,7 +62,7 @@ case "$app" in
     ;;
   Music|Spotify)
     icon="󰝚"
-    color="$ROSE"
+    color="$AMBER"
     ;;
   "System Settings")
     icon="󰒓"

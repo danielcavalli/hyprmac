@@ -1,0 +1,1264 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
+
+HYPRMAC_USER="${HYPRMAC_USER:-$(stat -f %Su "$HOME" 2>/dev/null || id -un)}"
+HYPRMAC_UID="${HYPRMAC_UID:-$(id -u "$HYPRMAC_USER" 2>/dev/null || id -u)}"
+HYPRMAC_HOME="${HYPRMAC_HOME:-$(dscl . -read "/Users/${HYPRMAC_USER}" NFSHomeDirectory 2>/dev/null | awk '{print $2}' || true)}"
+HYPRMAC_HOME="${HYPRMAC_HOME:-$HOME}"
+export PATH="$HYPRMAC_HOME/.local/bin:$HYPRMAC_HOME/.local/share/mise/shims:$PATH"
+HYPRMAC_CONFIG_DIR="${HYPRMAC_CONFIG_DIR:-$HYPRMAC_HOME/.config/hyprmac}"
+HYPRMAC_CHECKS_DIR="$HYPRMAC_CONFIG_DIR/checks.d"
+STATE_DIR="${XDG_STATE_HOME:-$HYPRMAC_HOME/.local/state}/hyprmac"
+JSON_OUTPUT=0
+REFRESH_AFTER=0
+QUIET=0
+
+usage() {
+  cat <<'EOF'
+hyprmac - Omarchy-like macOS control command
+
+Usage:
+  hyprmac [flags] version
+  hyprmac [flags] monitors|workspaces|activeworkspace|clients|activewindow
+  hyprmac [flags] query monitors|workspaces|clients|rules|signals|binds|config|layouts
+  hyprmac [flags] getoption <yabai-option>
+  hyprmac [flags] keyword <yabai-option> <value...>
+  hyprmac [flags] dispatch <action> [args...]
+  hyprmac [flags] raw <yabai|yabai-m|sketchybar|skhd|brew|launchctl|shell> [args...]
+  hyprmac [flags] batch 'command; command'
+  hyprmac [flags] notify [icon time_ms color] <message>
+  hyprmac [flags] dismissnotify
+
+  hyprmac doctor
+  hyprmac reload
+  hyprmac update
+  hyprmac sip [status|enable-arm64e|disable-arm64e]
+  hyprmac shell status|install-bash
+  hyprmac yabai status|restart|sudoers|load-sa|ensure-spaces [count]
+  hyprmac skhd restart|status
+  hyprmac bar status|restart|toggle
+  hyprmac power [menu|lock|sleep|restart|shutdown]
+  hyprmac dev doctor
+  hyprmac macos defaults|restore-ui
+  hyprmac ports [port]
+  hyprmac path
+  hyprmac docs hyprmac|design|keybindings|sip|troubleshooting
+  hyprmac theme current
+
+Flags:
+  -j, --json       Prefer machine-readable output where hyprmac formats data
+  -r, --refresh    Trigger SketchyBar refresh events after mutating commands
+  -q, --quiet      Suppress non-essential success output
+  --batch '...'    Run semicolon-separated hyprmac commands
+
+Dispatch examples:
+  hyprmac dispatch focusworkspace ws2
+  hyprmac dispatch movetoworkspacefollow ws4
+  hyprmac dispatch focuswindow west
+  hyprmac dispatch swapwindow east
+  hyprmac dispatch togglefloating
+  hyprmac dispatch layout stack
+  hyprmac keyword window_gap 10
+  hyprmac raw yabai-m query --windows --window
+EOF
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+runtime_path() {
+  local cmd="$1"
+
+  if command -v "$cmd" >/dev/null 2>&1; then
+    command -v "$cmd"
+    return 0
+  fi
+
+  if command -v mise >/dev/null 2>&1; then
+    mise which "$cmd" 2>/dev/null && return 0
+  fi
+
+  return 1
+}
+
+run_runtime() {
+  local cmd="$1"
+  local path
+  shift
+
+  path="$(runtime_path "$cmd")" || return 1
+  "$path" "$@"
+}
+
+dotfiles_root() {
+  local source dir
+  source="${BASH_SOURCE[0]}"
+
+  while [ -L "$source" ]; do
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    case "$source" in
+      /*) ;;
+      *) source="$dir/$source" ;;
+    esac
+  done
+
+  dir="$(cd -P "$(dirname "$source")" && pwd)"
+  if [ -d "$dir/../../../docs" ]; then
+    cd "$dir/../../.." && pwd
+  elif [ -n "${HYPRMAC_DOTFILES_DIR:-}" ]; then
+    printf '%s\n' "$HYPRMAC_DOTFILES_DIR"
+  else
+    printf '%s\n' "$dir/../../.."
+  fi
+}
+
+ok() {
+  [ "$QUIET" -eq 1 ] && return 0
+  printf 'ok: %s\n' "$*"
+}
+
+launchd_status() {
+  local label="$1"
+
+  if launchctl print "gui/${HYPRMAC_UID}/${label}" >/dev/null 2>&1; then
+    ok "launchd ${label} running"
+  else
+    warn "launchd ${label} not found in gui/${HYPRMAC_UID}"
+    return 1
+  fi
+}
+
+restart_gui_service() {
+  local label="$1"
+
+  if launchctl print "gui/${HYPRMAC_UID}/${label}" >/dev/null 2>&1; then
+    launchctl kickstart -k "gui/${HYPRMAC_UID}/${label}"
+    return 0
+  fi
+
+  return 1
+}
+
+same_target_user() {
+  [ "$(id -u)" = "$HYPRMAC_UID" ]
+}
+
+as_target_user() {
+  if same_target_user; then
+    env HOME="$HYPRMAC_HOME" USER="$HYPRMAC_USER" LOGNAME="$HYPRMAC_USER" PATH="$PATH" "$@"
+  elif [ "$(id -u)" = "0" ]; then
+    sudo -u "$HYPRMAC_USER" env HOME="$HYPRMAC_HOME" USER="$HYPRMAC_USER" LOGNAME="$HYPRMAC_USER" PATH="$PATH" "$@"
+  else
+    env HOME="$HYPRMAC_HOME" USER="$HYPRMAC_USER" LOGNAME="$HYPRMAC_USER" PATH="$PATH" "$@"
+  fi
+}
+
+warn() {
+  printf 'warn: %s\n' "$*" >&2
+}
+
+fail() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+trim() {
+  local value="$*"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+self_command() {
+  local self
+  self="$(command -v hyprmac 2>/dev/null || true)"
+  [ -n "$self" ] || self="${BASH_SOURCE[0]}"
+  printf '%s\n' "$self"
+}
+
+yabai_cmd() {
+  need yabai || fail "yabai is not installed"
+  as_target_user yabai -m "$@"
+}
+
+sketchybar_cmd() {
+  need sketchybar || fail "sketchybar is not installed"
+  as_target_user sketchybar "$@"
+}
+
+refresh_after_action() {
+  [ "$REFRESH_AFTER" -eq 1 ] || return 0
+  need sketchybar || return 0
+
+  as_target_user sketchybar --trigger yabai_window_changed >/dev/null 2>&1 || true
+  as_target_user sketchybar --trigger yabai_space_changed >/dev/null 2>&1 || true
+  as_target_user sketchybar --trigger yabai_spaces_changed >/dev/null 2>&1 || true
+}
+
+json_or_text_array() {
+  if [ "$JSON_OUTPUT" -eq 1 ] && need jq; then
+    jq -n '$ARGS.positional' --args "$@"
+  else
+    printf '%s\n' "$@"
+  fi
+}
+
+text_or_json_lines() {
+  local value="$1"
+  if [ "$JSON_OUTPUT" -eq 1 ] && need jq; then
+    printf '%s\n' "$value" | jq -R -s 'split("\n") | map(select(length > 0))'
+  else
+    printf '%s\n' "$value"
+  fi
+}
+
+version_info() {
+  local root yabai_version skhd_version sketchybar_version borders_version
+  root="$(dotfiles_root)"
+  yabai_version="$(as_target_user yabai --version 2>/dev/null || true)"
+  skhd_version="$(as_target_user skhd -v 2>/dev/null || true)"
+  sketchybar_version="$(as_target_user sketchybar --version 2>/dev/null || true)"
+  borders_version="$(as_target_user borders --version 2>/dev/null || true)"
+
+  if [ "$JSON_OUTPUT" -eq 1 ] && need jq; then
+    jq -n \
+      --arg hyprmac "hyprmac" \
+      --arg repo "$root" \
+      --arg yabai "$yabai_version" \
+      --arg skhd "$skhd_version" \
+      --arg sketchybar "$sketchybar_version" \
+      --arg borders "$borders_version" \
+      '{hyprmac:$hyprmac, repo:$repo, backend:{yabai:$yabai, skhd:$skhd, sketchybar:$sketchybar, borders:$borders}}'
+  else
+    printf 'hyprmac\n'
+    printf 'repo: %s\n' "$root"
+    [ -n "$yabai_version" ] && printf 'yabai: %s\n' "$yabai_version"
+    [ -n "$skhd_version" ] && printf 'skhd: %s\n' "$skhd_version"
+    [ -n "$sketchybar_version" ] && printf 'sketchybar: %s\n' "$sketchybar_version"
+    [ -n "$borders_version" ] && printf 'borders: %s\n' "$borders_version"
+  fi
+}
+
+system_info() {
+  local product version build arch user shell brew_path
+  product="$(sw_vers -productName 2>/dev/null || true)"
+  version="$(sw_vers -productVersion 2>/dev/null || true)"
+  build="$(sw_vers -buildVersion 2>/dev/null || true)"
+  arch="$(uname -m 2>/dev/null || true)"
+  user="$HYPRMAC_USER"
+  shell="${SHELL:-unknown}"
+  brew_path="$(command -v brew 2>/dev/null || true)"
+
+  if [ "$JSON_OUTPUT" -eq 1 ] && need jq; then
+    jq -n \
+      --arg product "$product" \
+      --arg version "$version" \
+      --arg build "$build" \
+      --arg arch "$arch" \
+      --arg user "$user" \
+      --arg shell "$shell" \
+      --arg brew "$brew_path" \
+      '{macos:{product:$product, version:$version, build:$build}, arch:$arch, user:$user, shell:$shell, brew:$brew}'
+  else
+    printf '%s %s (%s)\n' "$product" "$version" "$build"
+    printf 'arch: %s\n' "$arch"
+    printf 'user: %s\n' "$user"
+    printf 'shell: %s\n' "$shell"
+    printf 'brew: %s\n' "${brew_path:-missing}"
+  fi
+}
+
+query_state() {
+  local target="${1:-summary}"
+  shift || true
+
+  case "$target" in
+    monitors|monitor|displays|display)
+      yabai_cmd query --displays "$@"
+      ;;
+    workspaces|workspace|spaces)
+      yabai_cmd query --spaces "$@"
+      ;;
+    activeworkspace|active-workspace|active-space)
+      if [ "$#" -gt 0 ]; then
+        yabai_cmd query --spaces --space "$1"
+      else
+        yabai_cmd query --spaces --space
+      fi
+      ;;
+    clients|client|windows)
+      yabai_cmd query --windows "$@"
+      ;;
+    activewindow|active-window|window)
+      if [ "$#" -gt 0 ]; then
+        yabai_cmd query --windows --window "$1"
+      else
+        yabai_cmd query --windows --window
+      fi
+      ;;
+    rules|windowrules|window-rules)
+      yabai_cmd rule --list
+      ;;
+    signals|events)
+      yabai_cmd signal --list
+      ;;
+    binds|keybinds)
+      local skhdrc="$HYPRMAC_HOME/.config/skhd/skhdrc"
+      [ -r "$skhdrc" ] || fail "missing skhd config: $skhdrc"
+      text_or_json_lines "$(sed -n '/^[[:space:]]*#/d; /^[[:space:]]*$/d; /:/p' "$skhdrc")"
+      ;;
+    config|getoptions)
+      if [ "$#" -gt 0 ]; then
+        yabai_cmd config "$1"
+      else
+        fail "query config requires a yabai option"
+      fi
+      ;;
+    layouts)
+      json_or_text_array bsp stack float
+      ;;
+    instances)
+      text_or_json_lines "$(launchctl print "gui/${HYPRMAC_UID}" 2>/dev/null | grep -E 'com.asmvik.yabai|com.koekeishiya.skhd|homebrew.mxcl.sketchybar|homebrew.mxcl.borders|git.felix.sketchybar|git.felix.borders' || true)"
+      ;;
+    locked)
+      if ioreg -n Root -d1 2>/dev/null | grep -q 'CGSSessionScreenIsLocked.*Yes'; then
+        [ "$JSON_OUTPUT" -eq 1 ] && printf '{"locked":true}\n' || printf 'true\n'
+      else
+        [ "$JSON_OUTPUT" -eq 1 ] && printf '{"locked":false}\n' || printf 'false\n'
+      fi
+      ;;
+    configerrors)
+      [ "$JSON_OUTPUT" -eq 1 ] && printf '[]\n' || printf 'no yabai config error stream is exposed\n'
+      ;;
+    descriptions)
+      if [ "$JSON_OUTPUT" -eq 1 ] && need jq; then
+        jq -n '{commands:["query","dispatch","keyword","getoption","raw","batch","notify"], backends:["yabai","skhd","sketchybar","brew","launchctl","shell"]}'
+      else
+        usage
+      fi
+      ;;
+    summary|status)
+      version_info
+      printf '\n'
+      yabai_status || true
+      skhd_status || true
+      bar_status || true
+      ;;
+    *)
+      fail "unknown query target: $target"
+      ;;
+  esac
+}
+
+get_option() {
+  local option="${1:-}"
+  [ -n "$option" ] || fail "getoption requires a yabai option"
+  option="${option#yabai.}"
+  yabai_cmd config "$option"
+}
+
+set_keyword() {
+  local option="${1:-}"
+  [ -n "$option" ] || fail "keyword requires a yabai option"
+  shift || true
+  [ "$#" -gt 0 ] || fail "keyword requires a value"
+
+  option="${option#yabai.}"
+  yabai_cmd config "$option" "$@"
+  refresh_after_action
+}
+
+window_bool_field() {
+  case "$1" in
+    float) printf 'is-floating\n' ;;
+    sticky) printf 'is-sticky\n' ;;
+    zoom-fullscreen) printf 'has-fullscreen-zoom\n' ;;
+    zoom-parent) printf 'has-parent-zoom\n' ;;
+    *) return 1 ;;
+  esac
+}
+
+set_toggle_prop_state() {
+  local prop="$1"
+  local desired="$2"
+  local field current
+  field="$(window_bool_field "$prop")" || fail "explicit on/off is not supported for window property: $prop"
+  need jq || fail "jq is required for explicit window property state"
+  current="$(yabai_cmd query --windows --window 2>/dev/null | jq -r --arg field "$field" '.[$field] // false')"
+
+  case "$desired:$current" in
+    true:true|false:false) return 0 ;;
+    true:false|false:true) yabai_cmd window --toggle "$prop" ;;
+    *) fail "could not read current state for window property: $prop" ;;
+  esac
+}
+
+set_window_prop() {
+  local prop="${1:-}"
+  local value="${2:-toggle}"
+  [ -n "$prop" ] || fail "setprop requires a property"
+
+  case "$prop" in
+    float|sticky|split|zoom-fullscreen|zoom-parent|topmost|pip)
+      case "$value" in
+        toggle)
+          yabai_cmd window --toggle "$prop"
+          ;;
+        on|enable|enabled|true|1)
+          set_toggle_prop_state "$prop" true
+          ;;
+        off|disable|disabled|false|0)
+          set_toggle_prop_state "$prop" false
+          ;;
+        *)
+          fail "unsupported $prop value: $value"
+          ;;
+      esac
+      ;;
+    opacity)
+      [ -n "${2:-}" ] || fail "setprop opacity requires a value"
+      yabai_cmd window --opacity "$value"
+      ;;
+    sub-layer|sublayer|layer)
+      [ -n "${2:-}" ] || fail "setprop sub-layer requires a value"
+      yabai_cmd window --sub-layer "$value"
+      ;;
+    grid)
+      [ -n "${2:-}" ] || fail "setprop grid requires a value"
+      yabai_cmd window --grid "$value"
+      ;;
+    *)
+      fail "unsupported window property: $prop"
+      ;;
+  esac
+}
+
+signal_focused_window() {
+  local signal="${1:-TERM}"
+  local pid
+  need jq || fail "jq is required to target the focused window process"
+  pid="$(yabai_cmd query --windows --window 2>/dev/null | jq -r '.pid // empty')"
+  [ -n "$pid" ] || fail "no focused window pid found"
+  kill "-$signal" "$pid"
+}
+
+script_dispatch() {
+  local script="$1"
+  shift || true
+  [ -x "$script" ] || fail "missing executable: $script"
+  as_target_user "$script" "$@"
+}
+
+dispatch_action() {
+  local action="${1:-}"
+  local target name
+  [ -n "$action" ] || fail "dispatch requires an action"
+  shift || true
+
+  case "$action" in
+    exec)
+      [ "$#" -gt 0 ] || fail "dispatch exec requires a command"
+      as_target_user bash -lc "$*"
+      ;;
+    exec-raw|exec_raw)
+      [ "$#" -gt 0 ] || fail "dispatch exec-raw requires a command"
+      as_target_user "$@"
+      ;;
+    reload)
+      reload_all
+      ;;
+    close|closewindow|killactive)
+      if [ "$#" -gt 0 ]; then
+        yabai_cmd window "$1" --close
+      else
+        script_dispatch "$HYPRMAC_HOME/.config/yabai/scripts/close-window.sh"
+      fi
+      ;;
+    killwindow|signalwindow)
+      signal_focused_window "${1:-TERM}"
+      ;;
+    focus|focuswindow|movefocus)
+      target="${1:-}"
+      [ -n "$target" ] || fail "$action requires a window target or direction"
+      yabai_cmd window --focus "$target"
+      ;;
+    focusworkspace|workspace)
+      target="${1:-}"
+      [ -n "$target" ] || fail "$action requires a workspace"
+      yabai_cmd space --focus "$target"
+      ;;
+    movetoworkspace|movetows|movewindowtoworkspace|movetoworkspacesilent)
+      target="${1:-}"
+      [ -n "$target" ] || fail "$action requires a workspace"
+      yabai_cmd window --space "$target"
+      ;;
+    movetoworkspacefollow|movetowsfollow)
+      target="${1:-}"
+      [ -n "$target" ] || fail "$action requires a workspace"
+      yabai_cmd window --space "$target"
+      yabai_cmd space --focus "$target"
+      ;;
+    focusmonitor|focusdisplay|monitor)
+      target="${1:-}"
+      [ -n "$target" ] || fail "$action requires a display"
+      yabai_cmd display --focus "$target"
+      ;;
+    movetomonitor|movetodisplay)
+      target="${1:-}"
+      [ -n "$target" ] || fail "$action requires a display"
+      yabai_cmd window --display "$target"
+      ;;
+    movetomonitorfollow|movetodisplayfollow)
+      target="${1:-}"
+      [ -n "$target" ] || fail "$action requires a display"
+      yabai_cmd window --display "$target"
+      yabai_cmd display --focus "$target"
+      ;;
+    swapwindow|swap)
+      target="${1:-}"
+      [ -n "$target" ] || fail "$action requires a direction or window target"
+      yabai_cmd window --swap "$target"
+      ;;
+    warpwindow|warp|movewindow)
+      target="${1:-}"
+      [ -n "$target" ] || fail "$action requires a direction"
+      yabai_cmd window --warp "$target"
+      ;;
+    stackwindow|stack|moveintogroup)
+      target="${1:-recent}"
+      yabai_cmd window --stack "$target"
+      ;;
+    changegroupactive|groupactive|focusgroup)
+      target="${1:-next}"
+      case "$target" in
+        next|prev) yabai_cmd window --focus "stack.$target" ;;
+        *) yabai_cmd window --focus "stack.$target" ;;
+      esac
+      ;;
+    togglefloating|float)
+      yabai_cmd window --toggle float
+      ;;
+    fullscreen|togglefullscreen|fullscreenwindow)
+      yabai_cmd window --toggle zoom-fullscreen
+      ;;
+    fullscreenparent|zoomparent)
+      yabai_cmd window --toggle zoom-parent
+      ;;
+    togglesplit|split)
+      yabai_cmd window --toggle split
+      ;;
+    popwindow|pop)
+      script_dispatch "$HYPRMAC_HOME/.config/yabai/scripts/pop-window.sh"
+      ;;
+    fullwidth)
+      script_dispatch "$HYPRMAC_HOME/.config/yabai/scripts/full-width.sh"
+      ;;
+    center|centerwindow)
+      script_dispatch "$HYPRMAC_HOME/.config/yabai/scripts/center-float.sh"
+      ;;
+    layout)
+      target="${1:-bsp}"
+      yabai_cmd space --layout "$target"
+      ;;
+    togglelayout)
+      script_dispatch "$HYPRMAC_HOME/.config/yabai/scripts/toggle-layout.sh"
+      ;;
+    togglegaps|gap)
+      yabai_cmd space --toggle gap
+      ;;
+    togglepadding|padding)
+      yabai_cmd space --toggle padding
+      ;;
+    scratchpad|togglespecialworkspace)
+      name="${1:-hyprmac-scratchpad}"
+      yabai_cmd window --toggle "$name"
+      ;;
+    movetoscratchpad|movespecial)
+      name="${1:-hyprmac-scratchpad}"
+      yabai_cmd window --scratchpad "$name"
+      ;;
+    setprop)
+      set_window_prop "$@"
+      ;;
+    notify)
+      notify_cmd "$@"
+      ;;
+    *)
+      fail "unknown dispatch action: $action"
+      ;;
+  esac
+
+  refresh_after_action
+}
+
+raw_cmd() {
+  local backend="${1:-}"
+  [ -n "$backend" ] || fail "raw requires a backend"
+  shift || true
+
+  case "$backend" in
+    yabai)
+      need yabai || fail "yabai is not installed"
+      as_target_user yabai "$@"
+      ;;
+    yabai-m|wm)
+      need yabai || fail "yabai is not installed"
+      as_target_user yabai -m "$@"
+      ;;
+    sketchybar|bar)
+      need sketchybar || fail "sketchybar is not installed"
+      as_target_user sketchybar "$@"
+      ;;
+    skhd)
+      need skhd || fail "skhd is not installed"
+      as_target_user skhd "$@"
+      ;;
+    brew)
+      need brew || fail "brew is not installed"
+      as_target_user brew "$@"
+      ;;
+    launchctl)
+      launchctl "$@"
+      ;;
+    shell|sh|bash)
+      [ "$#" -gt 0 ] || fail "raw shell requires a command"
+      as_target_user bash -lc "$*"
+      ;;
+    *)
+      need "$backend" || fail "unknown raw backend: $backend"
+      as_target_user "$backend" "$@"
+      ;;
+  esac
+
+  refresh_after_action
+}
+
+batch_run() {
+  local input="${1:-}"
+  local self command quoted_self
+  local -a commands
+  [ -n "$input" ] || fail "batch requires a semicolon-separated command string"
+
+  self="$(self_command)"
+  printf -v quoted_self '%q' "$self"
+  IFS=';' read -r -a commands <<< "$input"
+
+  for command in "${commands[@]}"; do
+    command="$(trim "$command")"
+    [ -n "$command" ] || continue
+    as_target_user bash -lc "$quoted_self $command"
+  done
+}
+
+normalize_notify_color() {
+  local color="${1:-0xffffb454}"
+  case "$color" in
+    rgb\([0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]\))
+      color="0xff${color#rgb(}"
+      color="${color%)}"
+      ;;
+    rgba\([0-9A-Fa-f]*\))
+      color="0x${color#rgba(}"
+      color="${color%)}"
+      ;;
+    0)
+      color="0xffffb454"
+      ;;
+  esac
+  printf '%s\n' "$color"
+}
+
+notify_cmd() {
+  local icon="-1"
+  local time_ms="4500"
+  local color="0xffffb454"
+  local message item seconds
+
+  if [ "$#" -ge 4 ] && case "${2:-}" in ''|*[!0-9]*) false ;; *) true ;; esac; then
+    icon="$1"
+    time_ms="$2"
+    color="$(normalize_notify_color "$3")"
+    shift 3
+  fi
+
+  message="$*"
+  [ -n "$message" ] || fail "notify requires a message"
+  item="hyprmac.notify"
+  seconds=$((time_ms / 1000))
+  [ "$seconds" -gt 0 ] || seconds=4
+
+  if need sketchybar; then
+    as_target_user sketchybar --remove "$item" >/dev/null 2>&1 || true
+    as_target_user sketchybar --add item "$item" center \
+      --set "$item" \
+        drawing=on \
+        icon="$icon" \
+        icon.drawing=off \
+        label="$message" \
+        label.color=0xffffffff \
+        background.drawing=on \
+        background.color="$color" \
+        background.corner_radius=12 \
+        background.height=28 \
+        padding_left=8 \
+        padding_right=8 >/dev/null
+    (
+      sleep "$seconds"
+      as_target_user sketchybar --remove "$item" >/dev/null 2>&1 || true
+    ) &
+  else
+    osascript - "$message" <<'APPLESCRIPT'
+on run argv
+  display notification (item 1 of argv) with title "hyprmac"
+end run
+APPLESCRIPT
+  fi
+}
+
+dismiss_notify() {
+  if need sketchybar; then
+    as_target_user sketchybar --remove hyprmac.notify >/dev/null 2>&1 || true
+  fi
+}
+
+run_checks() {
+  local found=0
+  local failed=0
+  local check
+
+  if [ -d "$HYPRMAC_CHECKS_DIR" ]; then
+    for check in "$HYPRMAC_CHECKS_DIR"/*.sh; do
+      [ -r "$check" ] || continue
+      found=1
+      printf '\n==> %s\n' "$(basename "$check")"
+      if ! bash "$check"; then
+        failed=1
+      fi
+    done
+  fi
+
+  [ "$found" -eq 1 ] || warn "no checks found in $HYPRMAC_CHECKS_DIR"
+  return "$failed"
+}
+
+reload_all() {
+  need yabai && yabai_restart || true
+  need skhd && skhd_restart || true
+  bar_restart || true
+  ok "reload requested"
+}
+
+update_all() {
+  need brew || fail "Homebrew is not installed"
+  brew update
+  brew upgrade
+  brew cleanup
+
+  if need mise; then
+    mise upgrade || true
+    mise prune || true
+  fi
+
+  need pnpm && pnpm self-update || true
+  need bun && bun upgrade || true
+}
+
+current_boot_args() {
+  local line
+  line="$(nvram boot-args 2>/dev/null || true)"
+  line="${line#boot-args}"
+  trim "$line"
+}
+
+sip_has_arm64e_boot_arg() {
+  case " $1 " in
+    *' -arm64e_preview_abi '*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+sip_enable_arm64e() {
+  local boot_args next_args
+  boot_args="$(current_boot_args)"
+
+  if sip_has_arm64e_boot_arg "$boot_args"; then
+    ok "boot-args already include -arm64e_preview_abi"
+    return 0
+  fi
+
+  next_args="$(trim "$boot_args -arm64e_preview_abi")"
+  sudo nvram boot-args="$next_args"
+  ok "added -arm64e_preview_abi while preserving existing boot-args"
+  printf 'next: reboot so the kernel applies the persisted boot arg\n'
+}
+
+sip_disable_arm64e() {
+  local boot_args next_args arg
+  boot_args="$(current_boot_args)"
+
+  for arg in $boot_args; do
+    [ "$arg" = "-arm64e_preview_abi" ] && continue
+    next_args="${next_args:-} $arg"
+  done
+
+  next_args="$(trim "${next_args:-}")"
+  if [ -n "$next_args" ]; then
+    sudo nvram boot-args="$next_args"
+    ok "removed -arm64e_preview_abi and preserved remaining boot-args"
+  else
+    sudo nvram -d boot-args >/dev/null 2>&1 || true
+    ok "removed boot-args because no other args remained"
+  fi
+}
+
+sip_status() {
+  csrutil status || true
+
+  local boot_args active_boot_args
+  boot_args="$(current_boot_args)"
+  active_boot_args="$(sysctl -n kern.bootargs 2>/dev/null || true)"
+
+  if sip_has_arm64e_boot_arg "$boot_args"; then
+    printf 'nvram boot-args: %s\n' "$boot_args"
+  else
+    printf 'nvram boot-args: missing -arm64e_preview_abi\n'
+  fi
+
+  if sip_has_arm64e_boot_arg "$active_boot_args"; then
+    printf 'active boot-args: %s\n' "$active_boot_args"
+  else
+    printf 'active boot-args: missing -arm64e_preview_abi\n'
+    if sip_has_arm64e_boot_arg "$boot_args"; then
+      printf 'next: reboot so the kernel applies the persisted boot arg\n'
+    fi
+  fi
+
+  cat <<'EOF'
+
+Full yabai on Apple Silicon expects:
+  Recovery: csrutil enable --without fs --without debug --without nvram
+  macOS:    hyprmac sip enable-arm64e
+  Then:     hyprmac yabai sudoers && hyprmac yabai load-sa
+EOF
+}
+
+shell_status() {
+  printf 'login shell: %s\n' "${SHELL:-unknown}"
+  printf 'bash: %s\n' "$(command -v bash || true)"
+  bash --version | sed -n '1p'
+  if [ -x /opt/homebrew/bin/bash ]; then
+    /opt/homebrew/bin/bash --version | sed -n '1p'
+  fi
+}
+
+shell_install_bash() {
+  [ -x /opt/homebrew/bin/bash ] || fail "install Homebrew bash first: brew install bash"
+
+  if ! grep -qxF /opt/homebrew/bin/bash /etc/shells; then
+    printf '/opt/homebrew/bin/bash\n' | sudo tee -a /etc/shells >/dev/null
+  fi
+
+  ok "Homebrew Bash is allowed. Run: chsh -s /opt/homebrew/bin/bash"
+}
+
+yabai_status() {
+  need yabai || fail "yabai is not installed"
+  as_target_user yabai --version
+  if as_target_user yabai -m query --spaces >/dev/null 2>&1; then
+    ok "yabai query works"
+  else
+    warn "yabai query failed"
+  fi
+  launchd_status com.asmvik.yabai || true
+}
+
+yabai_restart() {
+  need yabai || fail "yabai is not installed"
+  restart_gui_service com.asmvik.yabai || { same_target_user && yabai --restart-service; }
+}
+
+yabai_sudoers() {
+  need yabai || fail "yabai is not installed"
+
+  local yabai_path hash line
+  yabai_path="$(command -v yabai)"
+  hash="$(shasum -a 256 "$yabai_path" | awk '{print $1}')"
+  line="${HYPRMAC_USER} ALL=(root) NOPASSWD: sha256:${hash} ${yabai_path} --load-sa"
+
+  printf '%s\n' "$line" | sudo tee /private/etc/sudoers.d/yabai >/dev/null
+  sudo chmod 440 /private/etc/sudoers.d/yabai
+  sudo visudo -cf /private/etc/sudoers.d/yabai >/dev/null
+  ok "configured /private/etc/sudoers.d/yabai"
+}
+
+yabai_load_sa() {
+  need yabai || fail "yabai is not installed"
+
+  local yabai_path
+  yabai_path="$(command -v yabai)"
+  as_target_user sudo -n "$yabai_path" --load-sa
+}
+
+yabai_ensure_spaces() {
+  local count="${1:-10}"
+  local script="$HYPRMAC_HOME/.config/yabai/scripts/ensure-spaces.sh"
+
+  need jq || fail "jq is required for yabai space management"
+  [ -x "$script" ] || fail "missing executable: $script"
+  as_target_user "$script" "$count"
+}
+
+skhd_status() {
+  need skhd || fail "skhd is not installed"
+  as_target_user skhd -v || true
+  launchd_status com.koekeishiya.skhd || true
+}
+
+skhd_restart() {
+  need skhd || fail "skhd is not installed"
+  restart_gui_service com.koekeishiya.skhd || { same_target_user && skhd --restart-service; }
+}
+
+bar_status() {
+  need sketchybar || fail "sketchybar is not installed"
+  as_target_user sketchybar --version || true
+  need brew && brew services list | grep -E 'sketchybar|borders' || true
+  launchctl print "gui/${HYPRMAC_UID}" 2>/dev/null | grep -E 'homebrew.mxcl.sketchybar|homebrew.mxcl.borders|git.felix.sketchybar|git.felix.borders' || true
+}
+
+bar_restart() {
+  need sketchybar && as_target_user sketchybar --reload || true
+  restart_gui_service homebrew.mxcl.sketchybar >/dev/null 2>&1 || { same_target_user && need brew && brew services restart sketchybar >/dev/null 2>&1; } || true
+  restart_gui_service homebrew.mxcl.borders >/dev/null 2>&1 || { same_target_user && need brew && brew services restart borders >/dev/null 2>&1; } || true
+  bar_sync_signals || true
+}
+
+bar_sync_signals() {
+  need yabai || return 0
+  need sketchybar || return 0
+
+  local yabai_path sketchybar_path label
+  yabai_path="$(command -v yabai)"
+  sketchybar_path="$(command -v sketchybar)"
+
+  for label in \
+    sketchybar_space_changed \
+    sketchybar_space_created \
+    sketchybar_space_destroyed \
+    sketchybar_window_created \
+    sketchybar_window_destroyed \
+    sketchybar_window_focused \
+    sketchybar_window_moved; do
+    as_target_user "$yabai_path" -m signal --remove "$label" >/dev/null 2>&1 || true
+  done
+
+  as_target_user "$yabai_path" -m signal --add label=sketchybar_space_changed event=space_changed action="$sketchybar_path --trigger yabai_space_changed" >/dev/null 2>&1 || true
+  as_target_user "$yabai_path" -m signal --add label=sketchybar_space_created event=space_created action="$sketchybar_path --trigger yabai_spaces_changed" >/dev/null 2>&1 || true
+  as_target_user "$yabai_path" -m signal --add label=sketchybar_space_destroyed event=space_destroyed action="$sketchybar_path --trigger yabai_spaces_changed" >/dev/null 2>&1 || true
+  as_target_user "$yabai_path" -m signal --add label=sketchybar_window_created event=window_created action="$sketchybar_path --trigger yabai_window_changed" >/dev/null 2>&1 || true
+  as_target_user "$yabai_path" -m signal --add label=sketchybar_window_destroyed event=window_destroyed action="$sketchybar_path --trigger yabai_window_changed" >/dev/null 2>&1 || true
+  as_target_user "$yabai_path" -m signal --add label=sketchybar_window_focused event=window_focused action="$sketchybar_path --trigger yabai_window_changed" >/dev/null 2>&1 || true
+  as_target_user "$yabai_path" -m signal --add label=sketchybar_window_moved event=window_moved action="$sketchybar_path --trigger yabai_window_changed" >/dev/null 2>&1 || true
+  as_target_user "$sketchybar_path" --trigger yabai_window_changed >/dev/null 2>&1 || true
+}
+
+bar_toggle() {
+  need sketchybar || fail "sketchybar is not installed"
+
+  mkdir -p "$STATE_DIR"
+  local state_file="$STATE_DIR/bar-hidden"
+  if [ -f "$state_file" ]; then
+    as_target_user sketchybar --bar hidden=off
+    rm -f "$state_file"
+  else
+    as_target_user sketchybar --bar hidden=on
+    touch "$state_file"
+  fi
+}
+
+power_menu() {
+  local action="${1:-menu}"
+
+  case "$action" in
+    menu)
+      if need sketchybar && as_target_user sketchybar --query power >/dev/null 2>&1; then
+        local power_script="$HYPRMAC_HOME/.config/sketchybar/plugins/power.sh"
+        if [ -x "$power_script" ]; then
+          as_target_user "$power_script" toggle
+        else
+          as_target_user sketchybar --set power popup.drawing=toggle
+        fi
+        return 0
+      fi
+
+      osascript <<'APPLESCRIPT'
+set actions to {"Lock Screen", "Sleep", "Restart...", "Shut Down..."}
+set picked to choose from list actions with title "Power" with prompt "Choose a power action" OK button name "Continue" cancel button name "Cancel"
+if picked is false then return
+set action to item 1 of picked
+
+if action is "Lock Screen" then
+  tell application "System Events" to keystroke "q" using {control down, command down}
+else if action is "Sleep" then
+  do shell script "pmset sleepnow"
+else if action is "Restart..." then
+  set confirmation to display dialog "Restart this Mac now?" buttons {"Cancel", "Restart"} default button "Cancel" with icon caution
+  if button returned of confirmation is "Restart" then tell application "System Events" to restart
+else if action is "Shut Down..." then
+  set confirmation to display dialog "Shut down this Mac now?" buttons {"Cancel", "Shut Down"} default button "Cancel" with icon caution
+  if button returned of confirmation is "Shut Down" then tell application "System Events" to shut down
+end if
+APPLESCRIPT
+      ;;
+    lock)
+      /System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -suspend
+      ;;
+    sleep)
+      pmset sleepnow
+      ;;
+    restart)
+      osascript -e 'display dialog "Restart this Mac now?" buttons {"Cancel", "Restart"} default button "Cancel" with icon caution' \
+        -e 'if button returned of result is "Restart" then tell application "System Events" to restart'
+      ;;
+    shutdown)
+      osascript -e 'display dialog "Shut down this Mac now?" buttons {"Cancel", "Shut Down"} default button "Cancel" with icon caution' \
+        -e 'if button returned of result is "Shut Down" then tell application "System Events" to shut down'
+      ;;
+    restart-now)
+      osascript -e 'tell application "System Events" to restart'
+      ;;
+    shutdown-now)
+      osascript -e 'tell application "System Events" to shut down'
+      ;;
+    *)
+      fail "unknown power action: $action"
+      ;;
+  esac
+}
+
+dev_doctor() {
+  local cmd path missing=0
+  for cmd in brew bash git gh mise uv python node npm pnpm bun zig zls nvim lazygit btop starship jq; do
+    if path="$(runtime_path "$cmd")"; then
+      printf 'ok: %s -> %s\n' "$cmd" "$path"
+    else
+      printf 'missing: %s\n' "$cmd"
+      missing=1
+    fi
+  done
+
+  printf '\nVersions:\n'
+  git --version || true
+  gh --version 2>/dev/null | sed -n '1p' || true
+  mise --version 2>/dev/null || true
+  uv --version 2>/dev/null || true
+  run_runtime python --version 2>/dev/null || true
+  run_runtime node --version 2>/dev/null || true
+  run_runtime pnpm --version 2>/dev/null || true
+  run_runtime bun --version 2>/dev/null || true
+  run_runtime zig version 2>/dev/null || true
+  run_runtime zls --version 2>/dev/null || true
+
+  return "$missing"
+}
+
+macos_defaults() {
+  as_target_user defaults write com.apple.dock mru-spaces -bool false
+  as_target_user defaults write com.apple.dock expose-group-apps -bool true
+  as_target_user defaults write com.apple.dock autohide -bool true
+  as_target_user defaults write com.apple.dock autohide-delay -float 0
+  as_target_user defaults write com.apple.dock autohide-time-modifier -float 0.18
+  as_target_user defaults write NSGlobalDomain _HIHideMenuBar -bool true
+  as_target_user defaults write NSGlobalDomain AppleMenuBarVisibleInFullscreen -bool false
+  as_target_user defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
+  as_target_user defaults write NSGlobalDomain InitialKeyRepeat -int 15
+  as_target_user defaults write NSGlobalDomain KeyRepeat -int 2
+  as_target_user defaults write com.apple.finder AppleShowAllFiles -bool true
+  as_target_user defaults write NSGlobalDomain AppleShowAllExtensions -bool true
+  as_target_user killall Dock >/dev/null 2>&1 || true
+  as_target_user killall Finder >/dev/null 2>&1 || true
+  as_target_user killall SystemUIServer >/dev/null 2>&1 || true
+}
+
+macos_restore_ui() {
+  as_target_user defaults write NSGlobalDomain _HIHideMenuBar -bool false
+  as_target_user defaults delete NSGlobalDomain AppleMenuBarVisibleInFullscreen >/dev/null 2>&1 || true
+  as_target_user defaults write com.apple.dock autohide -bool false
+  as_target_user killall Dock >/dev/null 2>&1 || true
+  as_target_user killall SystemUIServer >/dev/null 2>&1 || true
+}
+
+ports() {
+  local port="${1:-}"
+  if [ -n "$port" ]; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN
+  else
+    lsof -nP -iTCP -sTCP:LISTEN
+  fi
+}
+
+show_path() {
+  tr ':' '\n' <<< "$PATH"
+}
+
+theme_current() {
+  printf 'theme: solar-glass\n'
+  printf 'ghostty: ~/.config/ghostty/themes/tahoe-retrofuture\n'
+  printf 'sketchybar: ~/.config/sketchybar/theme.sh\n'
+}
+
+docs_open() {
+  local name="${1:-keybindings}"
+  local file root
+
+  case "$name" in
+    hyprmac|cli|command) file="docs/hyprmac.md" ;;
+    design|theme|tokens) file="docs/design-system.md" ;;
+    keybindings) file="docs/keybindings.md" ;;
+    sip|yabai) file="docs/sip-yabai.md" ;;
+    troubleshooting|trouble) file="docs/troubleshooting.md" ;;
+    *) usage; exit 2 ;;
+  esac
+
+  root="$(dotfiles_root)"
+  [ -r "$root/$file" ] || fail "missing doc: $root/$file"
+  as_target_user open "$root/$file"
+}
+
+main() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -j|--json)
+        JSON_OUTPUT=1
+        shift
+        ;;
+      -r|--refresh)
+        REFRESH_AFTER=1
+        shift
+        ;;
+      -q|--quiet)
+        QUIET=1
+        shift
+        ;;
+      --batch)
+        shift
+        batch_run "${1:-}"
+        return
+        ;;
+      --)
+        shift
+        break
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  local cmd="${1:-help}"
+  shift || true
+
+  case "$cmd" in
+    version) version_info ;;
+    systeminfo|system) system_info ;;
+    monitors|monitor|displays|display) query_state monitors "$@" ;;
+    workspaces|workspace|spaces) query_state workspaces "$@" ;;
+    activeworkspace|active-workspace|active-space) query_state activeworkspace "$@" ;;
+    clients|client|windows) query_state clients "$@" ;;
+    activewindow|active-window|window) query_state activewindow "$@" ;;
+    rules|windowrules|window-rules) query_state rules "$@" ;;
+    signals|events) query_state signals "$@" ;;
+    binds|keybinds) query_state binds "$@" ;;
+    instances|locked|layouts|configerrors|descriptions) query_state "$cmd" "$@" ;;
+    query) query_state "${1:-summary}" "${@:2}" ;;
+    getoption) get_option "$@" ;;
+    keyword) set_keyword "$@" ;;
+    dispatch) dispatch_action "$@" ;;
+    eval) raw_cmd shell "$*" ;;
+    raw) raw_cmd "$@" ;;
+    batch) batch_run "${1:-}" ;;
+    notify) notify_cmd "$@" ;;
+    dismissnotify) dismiss_notify ;;
+    output)
+      case "${1:-list}" in
+        list|monitors|displays) query_state monitors ;;
+        create|add|remove|destroy) fail "macOS/yabai cannot create fake Hyprland outputs" ;;
+        *) usage; exit 2 ;;
+      esac
+      ;;
+    doctor) run_checks ;;
+    reload) reload_all ;;
+    update) update_all ;;
+    sip)
+      case "${1:-status}" in
+        status) sip_status ;;
+        enable-arm64e|enable-boot-arg) sip_enable_arm64e ;;
+        disable-arm64e|remove-arm64e|disable-boot-arg) sip_disable_arm64e ;;
+        *) usage; exit 2 ;;
+      esac
+      ;;
+    shell)
+      case "${1:-status}" in
+        status) shell_status ;;
+        install-bash) shell_install_bash ;;
+        *) usage; exit 2 ;;
+      esac
+      ;;
+    yabai)
+      case "${1:-status}" in
+        status) yabai_status ;;
+        restart) yabai_restart ;;
+        sudoers) yabai_sudoers ;;
+        load-sa) yabai_load_sa ;;
+        ensure-spaces) shift || true; yabai_ensure_spaces "${1:-10}" ;;
+        *) usage; exit 2 ;;
+      esac
+      ;;
+    skhd)
+      case "${1:-status}" in
+        status) skhd_status ;;
+        restart) skhd_restart ;;
+        *) usage; exit 2 ;;
+      esac
+      ;;
+    bar)
+      case "${1:-status}" in
+        status) bar_status ;;
+        restart) bar_restart ;;
+        toggle) bar_toggle ;;
+        *) usage; exit 2 ;;
+      esac
+      ;;
+    power) power_menu "${1:-menu}" ;;
+    dev)
+      case "${1:-doctor}" in
+        doctor) dev_doctor ;;
+        *) usage; exit 2 ;;
+      esac
+      ;;
+    macos)
+      case "${1:-defaults}" in
+        defaults) macos_defaults ;;
+        restore-ui) macos_restore_ui ;;
+        *) usage; exit 2 ;;
+      esac
+      ;;
+    ports) ports "${1:-}" ;;
+    path) show_path ;;
+    docs) docs_open "${1:-keybindings}" ;;
+    theme)
+      case "${1:-current}" in
+        current) theme_current ;;
+        *) usage; exit 2 ;;
+      esac
+      ;;
+    help|-h|--help) usage ;;
+    *) usage; exit 2 ;;
+  esac
+}
+
+main "$@"

@@ -1,6 +1,6 @@
-# Tahoe Omarchy Dotfiles
+# Hyprmac Dotfiles
 
-This repo turns a fresh Apple Silicon macOS 26 machine into an Omarchy-like developer workstation using native macOS tools and an OpenCode Installer Agent.
+This repo turns a fresh Apple Silicon macOS 26 machine into an Omarchy-like Solar Glass developer workstation using native macOS tools and an OpenCode Installer Agent.
 
 Core stack:
 - `yabai` for BSP/dwindle-like tiling and workspaces
@@ -123,5 +123,6 @@ bash -n home/.bashrc home/.bash_profile home/.profile home/.local/bin/hyprmac
 - `docs/sip-yabai.md`: full SIP and scripting-addition path
 - `docs/installer-agent.md`: agent-native installation and resume model
 - `docs/hyprmac.md`: command-center and hyprctl-style operator CLI
+- `docs/design-system.md`: Solar Glass visual and interaction tokens
 - `docs/keybindings.md`: default hotkeys
 - `docs/troubleshooting.md`: recovery and diagnosis

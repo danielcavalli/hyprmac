@@ -23,7 +23,7 @@ elif [ "${num:-0}" -le 55 ]; then
   bg="off"
 else
   icon="󰁹"
-  color="$AMBER"
+  color="$LIME"
   label_color="$TEXT"
   bg="off"
 fi

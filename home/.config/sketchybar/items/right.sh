@@ -4,24 +4,24 @@
 "$SKETCHYBAR_BIN" --add item power right \
   --set power \
     icon="󰐥" \
-    icon.color="${ROSE}" \
+    icon.color="${AMBER}" \
     width=32 \
     padding_left=5 \
     padding_right=4 \
     icon.padding_left=8 \
     icon.padding_right=8 \
     label.drawing=off \
-    background.color=0x14ff5f87 \
-    background.border_color=0x32ff5f87 \
+    background.color="${ITEM_BG_CONFIRM}" \
+    background.border_color="${ITEM_BORDER_CONFIRM}" \
     background.drawing=off \
     popup.align=right \
-    popup.background.color=0x44111018 \
-    popup.background.border_color=0x20f8ead2 \
+    popup.background.color="${POPUP_BG}" \
+    popup.background.border_color="${POPUP_BORDER}" \
     popup.background.border_width=1 \
-    popup.background.corner_radius=14 \
+    popup.background.corner_radius="${POPUP_RADIUS}" \
     popup.background.shadow.drawing=on \
-    popup.background.shadow.color=0x55111018 \
-    popup.blur_radius=46 \
+    popup.background.shadow.color="${POPUP_SHADOW}" \
+    popup.blur_radius="${POPUP_BLUR}" \
     click_script="\"${PLUGIN_DIR}/power.sh\" toggle"
 
 for item in lock sleep restart shutdown; do
@@ -29,11 +29,11 @@ for item in lock sleep restart shutdown; do
     lock)
       icon="󰌾"; label="Lock"; color="${BLUE}"; action="lock" ;;
     sleep)
-      icon="󰒲"; label="Sleep"; color="${PURPLE}"; action="sleep" ;;
+      icon="󰒲"; label="Sleep"; color="${BLUE}"; action="sleep" ;;
     restart)
-      icon="󰑐"; label="Restart"; color="${AMBER}"; action="restart" ;;
+      icon="󰑐"; label="Restart"; color="${AMBER}"; action="confirm-restart" ;;
     shutdown)
-      icon="󰐥"; label="Shut Down"; color="${ROSE}"; action="shutdown" ;;
+      icon="󰐥"; label="Shut Down"; color="${ROSE}"; action="confirm-shutdown" ;;
   esac
 
   "$SKETCHYBAR_BIN" --add item "power.${item}" popup.power \
@@ -45,20 +45,20 @@ for item in lock sleep restart shutdown; do
       label="$label" \
       label.color="${TEXT}" \
       label.padding_right=12 \
-      width=128 \
+      width=148 \
       padding_left=6 \
       padding_right=6 \
-      background.height=30 \
-      background.corner_radius=10 \
-      background.color=0x08f8ead2 \
-      background.border_color=0x0df8ead2 \
+      background.height="${POPUP_ROW_HEIGHT}" \
+      background.corner_radius="${ITEM_RADIUS}" \
+      background.color="${POPUP_ITEM_BG}" \
+      background.border_color="${POPUP_ITEM_BORDER}" \
       click_script="\"${PLUGIN_DIR}/power.sh\" ${action}"
 done
 
 "$SKETCHYBAR_BIN" --add item battery right \
   --set battery \
     icon="󰁹" \
-    icon.color="${AMBER}" \
+    icon.color="${LIME}" \
     width=58 \
     padding_left=4 \
     padding_right=5 \
@@ -85,13 +85,13 @@ done
     label.drawing=off \
     background.drawing=off \
     popup.align=right \
-    popup.background.color=0x44111018 \
-    popup.background.border_color=0x20f8ead2 \
+    popup.background.color="${POPUP_BG}" \
+    popup.background.border_color="${POPUP_BORDER}" \
     popup.background.border_width=1 \
-    popup.background.corner_radius=14 \
+    popup.background.corner_radius="${POPUP_RADIUS}" \
     popup.background.shadow.drawing=on \
-    popup.background.shadow.color=0x55111018 \
-    popup.blur_radius=46 \
+    popup.background.shadow.color="${POPUP_SHADOW}" \
+    popup.blur_radius="${POPUP_BLUR}" \
     script="${PLUGIN_DIR}/wifi.sh" \
     update_freq=30 \
     click_script="\"${PLUGIN_DIR}/wifi.sh\" toggle" \
@@ -107,11 +107,11 @@ done
     label.font="${FONT_TEXT}:Semibold:12.0" \
     label.color="${TEXT}" \
     label.padding_right=12 \
-    width=190 \
-    background.height=30 \
-    background.corner_radius=10 \
-    background.color=0x10f8ead2 \
-    background.border_color=0x16f8ead2
+    width=216 \
+    background.height="${POPUP_TITLE_HEIGHT}" \
+    background.corner_radius="${ITEM_RADIUS}" \
+    background.color="${POPUP_TITLE_BG}" \
+    background.border_color="${POPUP_ITEM_BORDER}"
 
 "$SKETCHYBAR_BIN" --add item wifi.toggle popup.wifi \
   --set wifi.toggle \
@@ -122,11 +122,11 @@ done
     label="Toggle Wi-Fi" \
     label.color="${TEXT}" \
     label.padding_right=12 \
-    width=190 \
-    background.height=28 \
-    background.corner_radius=10 \
-    background.color=0x08f8ead2 \
-    background.border_color=0x0df8ead2 \
+    width=216 \
+    background.height="${POPUP_ROW_HEIGHT}" \
+    background.corner_radius="${ITEM_RADIUS}" \
+    background.color="${POPUP_ITEM_BG}" \
+    background.border_color="${POPUP_ITEM_BORDER}" \
     click_script="\"${PLUGIN_DIR}/wifi.sh\" power-toggle"
 
 "$SKETCHYBAR_BIN" --add item wifi.refresh popup.wifi \
@@ -138,11 +138,11 @@ done
     label="Refresh Saved" \
     label.color="${TEXT}" \
     label.padding_right=12 \
-    width=190 \
-    background.height=28 \
-    background.corner_radius=10 \
-    background.color=0x08f8ead2 \
-    background.border_color=0x0df8ead2 \
+    width=216 \
+    background.height="${POPUP_ROW_HEIGHT}" \
+    background.corner_radius="${ITEM_RADIUS}" \
+    background.color="${POPUP_ITEM_BG}" \
+    background.border_color="${POPUP_ITEM_BORDER}" \
     click_script="\"${PLUGIN_DIR}/wifi.sh\" refresh"
 
 for slot in 1 2 3 4 5 6; do
@@ -155,11 +155,11 @@ for slot in 1 2 3 4 5 6; do
       icon.padding_right=8 \
       label.color="${TEXT}" \
       label.padding_right=12 \
-      width=190 \
-      background.height=28 \
-      background.corner_radius=10 \
-      background.color=0x08f8ead2 \
-      background.border_color=0x0df8ead2 \
+      width=216 \
+      background.height="${POPUP_ROW_HEIGHT}" \
+      background.corner_radius="${ITEM_RADIUS}" \
+      background.color="${POPUP_ITEM_BG}" \
+      background.border_color="${POPUP_ITEM_BORDER}" \
       click_script="\"${PLUGIN_DIR}/wifi.sh\" connect-slot ${slot}"
 done
 
@@ -172,11 +172,11 @@ done
     label="Network Settings" \
     label.color="${MUTED}" \
     label.padding_right=12 \
-    width=190 \
-    background.height=28 \
-    background.corner_radius=10 \
-    background.color=0x05f8ead2 \
-    background.border_color=0x08f8ead2 \
+    width=216 \
+    background.height="${POPUP_ROW_HEIGHT}" \
+    background.corner_radius="${ITEM_RADIUS}" \
+    background.color="${POPUP_MUTED_BG}" \
+    background.border_color="${POPUP_MUTED_BORDER}" \
     click_script="\"${PLUGIN_DIR}/wifi.sh\" settings"
 
 "$SKETCHYBAR_BIN" --add item bluetooth right \
@@ -191,13 +191,13 @@ done
     label.drawing=off \
     background.drawing=off \
     popup.align=right \
-    popup.background.color=0x44111018 \
-    popup.background.border_color=0x20f8ead2 \
+    popup.background.color="${POPUP_BG}" \
+    popup.background.border_color="${POPUP_BORDER}" \
     popup.background.border_width=1 \
-    popup.background.corner_radius=14 \
+    popup.background.corner_radius="${POPUP_RADIUS}" \
     popup.background.shadow.drawing=on \
-    popup.background.shadow.color=0x55111018 \
-    popup.blur_radius=46 \
+    popup.background.shadow.color="${POPUP_SHADOW}" \
+    popup.blur_radius="${POPUP_BLUR}" \
     script="${PLUGIN_DIR}/bluetooth.sh" \
     update_freq=20 \
     click_script="\"${PLUGIN_DIR}/bluetooth.sh\" toggle" \
@@ -213,11 +213,11 @@ done
     label.font="${FONT_TEXT}:Semibold:12.0" \
     label.color="${TEXT}" \
     label.padding_right=12 \
-    width=210 \
-    background.height=30 \
-    background.corner_radius=10 \
-    background.color=0x10f8ead2 \
-    background.border_color=0x16f8ead2
+    width=230 \
+    background.height="${POPUP_TITLE_HEIGHT}" \
+    background.corner_radius="${ITEM_RADIUS}" \
+    background.color="${POPUP_TITLE_BG}" \
+    background.border_color="${POPUP_ITEM_BORDER}"
 
 "$SKETCHYBAR_BIN" --add item bluetooth.toggle popup.bluetooth \
   --set bluetooth.toggle \
@@ -228,11 +228,11 @@ done
     label="Toggle Bluetooth" \
     label.color="${TEXT}" \
     label.padding_right=12 \
-    width=210 \
-    background.height=28 \
-    background.corner_radius=10 \
-    background.color=0x08f8ead2 \
-    background.border_color=0x0df8ead2 \
+    width=230 \
+    background.height="${POPUP_ROW_HEIGHT}" \
+    background.corner_radius="${ITEM_RADIUS}" \
+    background.color="${POPUP_ITEM_BG}" \
+    background.border_color="${POPUP_ITEM_BORDER}" \
     click_script="\"${PLUGIN_DIR}/bluetooth.sh\" power-toggle"
 
 for slot in 1 2 3 4 5; do
@@ -245,11 +245,11 @@ for slot in 1 2 3 4 5; do
       icon.padding_right=8 \
       label.color="${TEXT}" \
       label.padding_right=12 \
-      width=210 \
-      background.height=28 \
-      background.corner_radius=10 \
-      background.color=0x08f8ead2 \
-      background.border_color=0x0df8ead2 \
+      width=230 \
+      background.height="${POPUP_ROW_HEIGHT}" \
+      background.corner_radius="${ITEM_RADIUS}" \
+      background.color="${POPUP_ITEM_BG}" \
+      background.border_color="${POPUP_ITEM_BORDER}" \
       click_script="\"${PLUGIN_DIR}/bluetooth.sh\" device-slot ${slot}"
 done
 
@@ -262,11 +262,11 @@ done
     label="Bluetooth Settings" \
     label.color="${MUTED}" \
     label.padding_right=12 \
-    width=210 \
-    background.height=28 \
-    background.corner_radius=10 \
-    background.color=0x05f8ead2 \
-    background.border_color=0x08f8ead2 \
+    width=230 \
+    background.height="${POPUP_ROW_HEIGHT}" \
+    background.corner_radius="${ITEM_RADIUS}" \
+    background.color="${POPUP_MUTED_BG}" \
+    background.border_color="${POPUP_MUTED_BORDER}" \
     click_script="\"${PLUGIN_DIR}/bluetooth.sh\" settings"
 
 "$SKETCHYBAR_BIN" --add item volume right \
@@ -281,13 +281,13 @@ done
     label.drawing=off \
     background.drawing=off \
     popup.align=right \
-    popup.background.color=0x44111018 \
-    popup.background.border_color=0x20f8ead2 \
+    popup.background.color="${POPUP_BG}" \
+    popup.background.border_color="${POPUP_BORDER}" \
     popup.background.border_width=1 \
-    popup.background.corner_radius=14 \
+    popup.background.corner_radius="${POPUP_RADIUS}" \
     popup.background.shadow.drawing=on \
-    popup.background.shadow.color=0x55111018 \
-    popup.blur_radius=46 \
+    popup.background.shadow.color="${POPUP_SHADOW}" \
+    popup.blur_radius="${POPUP_BLUR}" \
     script="${PLUGIN_DIR}/volume.sh" \
     click_script="\"${PLUGIN_DIR}/volume.sh\" toggle" \
   --subscribe volume volume_change system_woke
@@ -302,17 +302,17 @@ done
     label.font="${FONT_TEXT}:Semibold:12.0" \
     label.color="${TEXT}" \
     label.padding_right=12 \
-    width=210 \
-    background.height=30 \
-    background.corner_radius=10 \
-    background.color=0x10f8ead2 \
-    background.border_color=0x16f8ead2
+    width=230 \
+    background.height="${POPUP_TITLE_HEIGHT}" \
+    background.corner_radius="${ITEM_RADIUS}" \
+    background.color="${POPUP_TITLE_BG}" \
+    background.border_color="${POPUP_ITEM_BORDER}"
 
 for control in down mute up; do
   case "$control" in
     down) icon="󰝞"; label="Volume -10"; color="${BLUE}" ;;
     mute) icon="󰖁"; label="Mute"; color="${AMBER}" ;;
-    up) icon="󰝝"; label="Volume +10"; color="${CYAN}" ;;
+    up) icon="󰝝"; label="Volume +10"; color="${AMBER}" ;;
   esac
 
   "$SKETCHYBAR_BIN" --add item "volume.${control}" popup.volume \
@@ -324,11 +324,11 @@ for control in down mute up; do
       label="$label" \
       label.color="${TEXT}" \
       label.padding_right=12 \
-      width=210 \
-      background.height=28 \
-      background.corner_radius=10 \
-      background.color=0x08f8ead2 \
-      background.border_color=0x0df8ead2 \
+      width=230 \
+      background.height="${POPUP_ROW_HEIGHT}" \
+      background.corner_radius="${ITEM_RADIUS}" \
+      background.color="${POPUP_ITEM_BG}" \
+      background.border_color="${POPUP_ITEM_BORDER}" \
       click_script="\"${PLUGIN_DIR}/volume.sh\" ${control}"
 done
 
@@ -341,8 +341,8 @@ done
     label="Output" \
     label.color="${MUTED}" \
     label.padding_right=12 \
-    width=210 \
-    background.height=24 \
+    width=230 \
+    background.height=26 \
     background.color=0x00000000 \
     background.border_color=0x00000000
 
@@ -356,11 +356,11 @@ for slot in 1 2 3 4; do
       icon.padding_right=8 \
       label.color="${TEXT}" \
       label.padding_right=12 \
-      width=210 \
-      background.height=28 \
-      background.corner_radius=10 \
-      background.color=0x08f8ead2 \
-      background.border_color=0x0df8ead2 \
+      width=230 \
+      background.height="${POPUP_ROW_HEIGHT}" \
+      background.corner_radius="${ITEM_RADIUS}" \
+      background.color="${POPUP_ITEM_BG}" \
+      background.border_color="${POPUP_ITEM_BORDER}" \
       click_script="\"${PLUGIN_DIR}/volume.sh\" output-slot ${slot}"
 done
 
@@ -373,8 +373,8 @@ done
     label="Input" \
     label.color="${MUTED}" \
     label.padding_right=12 \
-    width=210 \
-    background.height=24 \
+    width=230 \
+    background.height=26 \
     background.color=0x00000000 \
     background.border_color=0x00000000
 
@@ -388,11 +388,11 @@ for slot in 1 2 3; do
       icon.padding_right=8 \
       label.color="${TEXT}" \
       label.padding_right=12 \
-      width=210 \
-      background.height=28 \
-      background.corner_radius=10 \
-      background.color=0x08f8ead2 \
-      background.border_color=0x0df8ead2 \
+      width=230 \
+      background.height="${POPUP_ROW_HEIGHT}" \
+      background.corner_radius="${ITEM_RADIUS}" \
+      background.color="${POPUP_ITEM_BG}" \
+      background.border_color="${POPUP_ITEM_BORDER}" \
       click_script="\"${PLUGIN_DIR}/volume.sh\" input-slot ${slot}"
 done
 
@@ -405,11 +405,11 @@ done
     label="Sound Settings" \
     label.color="${MUTED}" \
     label.padding_right=12 \
-    width=210 \
-    background.height=28 \
-    background.corner_radius=10 \
-    background.color=0x05f8ead2 \
-    background.border_color=0x08f8ead2 \
+    width=230 \
+    background.height="${POPUP_ROW_HEIGHT}" \
+    background.corner_radius="${ITEM_RADIUS}" \
+    background.color="${POPUP_MUTED_BG}" \
+    background.border_color="${POPUP_MUTED_BORDER}" \
     click_script="\"${PLUGIN_DIR}/volume.sh\" settings"
 
 "$SKETCHYBAR_BIN" --add item cpu right \
@@ -432,23 +432,23 @@ done
     drawing=off \
     updates=on \
     icon="󰐊" \
-    icon.color="${ROSE}" \
+    icon.color="${AMBER}" \
     width=220 \
     label.max_chars=24 \
     padding_left=6 \
     padding_right=6 \
-    background.color=0x14ff5f87 \
-    background.border_color=0x32ff5f87 \
+    background.color="${ITEM_BG_CONFIRM}" \
+    background.border_color="${ITEM_BORDER_CONFIRM}" \
     script="${PLUGIN_DIR}/now_playing.sh" \
     update_freq=12 \
   --subscribe now_playing media_change system_woke
 
 "$SKETCHYBAR_BIN" --add bracket system_status cpu volume bluetooth wifi battery power \
   --set system_status \
-    background.color=0x04f8ead2 \
-    background.corner_radius=14 \
-    background.height=28 \
+    background.color="${BRACKET_BG}" \
+    background.corner_radius="${BAR_RADIUS}" \
+    background.height=30 \
     background.border_width=1 \
-    background.border_color=0x09f8ead2 \
+    background.border_color="${BRACKET_BORDER}" \
     icon.drawing=off \
     label.drawing=off

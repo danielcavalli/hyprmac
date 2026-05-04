@@ -20,18 +20,18 @@ export CONFIG_DIR PLUGIN_DIR ITEM_DIR YABAI_BIN SKETCHYBAR_BIN HYPRMAC_BIN
   position=top \
   sticky=on \
   topmost=window \
-  padding_left=8 \
-  padding_right=8 \
+  padding_left=10 \
+  padding_right=10 \
   color="${BAR_BG}" \
   shadow=off \
-  blur_radius=46 \
-  y_offset=4 \
-  margin=6 \
-  corner_radius=16
+  blur_radius="${POPUP_BLUR}" \
+  y_offset=6 \
+  margin="${BAR_MARGIN}" \
+  corner_radius="${BAR_RADIUS}"
 
 "$SKETCHYBAR_BIN" --default \
   updates=when_shown \
-  icon.font="${FONT_TEXT}:Semibold:13.0" \
+  icon.font="${FONT_ICON}:Semibold:13.0" \
   icon.color="${TEXT}" \
   icon.padding_left=6 \
   icon.padding_right=6 \
@@ -42,8 +42,8 @@ export CONFIG_DIR PLUGIN_DIR ITEM_DIR YABAI_BIN SKETCHYBAR_BIN HYPRMAC_BIN
   padding_left=4 \
   padding_right=4 \
   background.color="${ITEM_BG}" \
-  background.corner_radius=10 \
-  background.height=23 \
+  background.corner_radius="${ITEM_RADIUS}" \
+  background.height="${ITEM_HEIGHT}" \
   background.border_width=1 \
   background.border_color="${ITEM_BORDER}"
 
