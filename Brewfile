@@ -15,6 +15,8 @@ brew "wget"
 # Developer CLI
 brew "git"
 brew "gh"
+brew "gnupg"
+brew "pinentry-mac"
 brew "opencode"
 brew "git-delta"
 brew "jq"
